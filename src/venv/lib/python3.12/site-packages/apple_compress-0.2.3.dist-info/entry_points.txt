@@ -1,0 +1,3 @@
+[console_scripts]
+acompress=apple_compress.__main__:main
+

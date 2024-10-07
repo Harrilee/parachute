@@ -1,0 +1,2 @@
+[console_scripts]
+pymobiledevice3 = opack.__main__:cli

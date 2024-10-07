@@ -1,0 +1,3 @@
+[console_scripts]
+remotezip = remotezip:main
+

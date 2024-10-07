@@ -1,0 +1,3 @@
+[console_scripts]
+pyimg4=pyimg4.__main__:cli
+
