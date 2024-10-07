@@ -1,3 +1,0 @@
-xompletions
-xonsh
-xontrib

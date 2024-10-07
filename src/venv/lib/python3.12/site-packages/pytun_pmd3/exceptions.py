@@ -1,2 +1,0 @@
-class PyWinTunException(Exception):
-    pass
