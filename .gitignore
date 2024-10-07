@@ -92,3 +92,7 @@ typings/
 
 # Electron-Forge
 out/
+
+
+# Python
+venv
