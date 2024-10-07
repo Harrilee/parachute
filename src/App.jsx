@@ -2,21 +2,37 @@ import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import Maps from './pages/Maps.jsx'
 import ControlCenter from './pages/ControlCenter.jsx'
+import { ThemeProvider, createTheme } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
+
+const darkTheme = createTheme({
+    palette: {
+        mode: 'dark',
+    },
+})
 import _ from './app.css'
 import { PHONE_CONNECTION_STATUS, LOCATION_SIMULATION_STATUS } from './utils.js'
 
 const root = createRoot(document.getElementById('root'))
 
 const App = () => {
-    const [longitude, setLongitude] = useState(116.3975)
-    const [latitude, setLatitude] = useState(39.9087)
+    const [longitude, setLongitude] = useState('-')
+    const [latitude, setLatitude] = useState('-')
     const [phoneConnectionStatus, setPhoneConnectionStatus] = useState(PHONE_CONNECTION_STATUS.DISCONNECTED)
     const [locationSimulationStatus, setLocationSimulationStatus] = useState(LOCATION_SIMULATION_STATUS.STOPPED)
 
     return (
         <>
-            <Maps setLatitude={setLatitude} setLongitude={setLongitude} />
-            <ControlCenter longitude={longitude} latitude={latitude} />
+            <ThemeProvider theme={darkTheme}>
+                <CssBaseline />
+                <Maps setLatitude={setLatitude} setLongitude={setLongitude} />
+                <ControlCenter
+                    longitude={longitude}
+                    latitude={latitude}
+                    phoneConnectionStatus={phoneConnectionStatus}
+                    setPhoneConnectionStatus={setPhoneConnectionStatus}
+                />
+            </ThemeProvider>
         </>
     )
 }
