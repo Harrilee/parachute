@@ -7,7 +7,7 @@ import CssBaseline from '@mui/material/CssBaseline'
 
 const darkTheme = createTheme({
     palette: {
-        mode: 'dark',
+        mode: 'light',
     },
 })
 import _ from './app.css'
@@ -18,6 +18,7 @@ const root = createRoot(document.getElementById('root'))
 const App = () => {
     const [longitude, setLongitude] = useState('-')
     const [latitude, setLatitude] = useState('-')
+    const [mapLoaded, setMapLoaded] = useState(false)
     const [phoneConnectionStatus, setPhoneConnectionStatus] = useState(PHONE_CONNECTION_STATUS.DISCONNECTED)
     const [locationSimulationStatus, setLocationSimulationStatus] = useState(LOCATION_SIMULATION_STATUS.STOPPED)
 
@@ -25,13 +26,17 @@ const App = () => {
         <>
             <ThemeProvider theme={darkTheme}>
                 <CssBaseline />
-                <Maps setLatitude={setLatitude} setLongitude={setLongitude} />
-                <ControlCenter
-                    longitude={longitude}
-                    latitude={latitude}
-                    phoneConnectionStatus={phoneConnectionStatus}
-                    setPhoneConnectionStatus={setPhoneConnectionStatus}
-                />
+                <Maps setLatitude={setLatitude} setLongitude={setLongitude} setMapLoaded={setMapLoaded} />
+                {mapLoaded && (
+                    <ControlCenter
+                        longitude={longitude}
+                        latitude={latitude}
+                        phoneConnectionStatus={phoneConnectionStatus}
+                        setPhoneConnectionStatus={setPhoneConnectionStatus}
+                        locationSimulationStatus={locationSimulationStatus}
+                        setLocationSimulationStatus={setLocationSimulationStatus}
+                    />
+                )}
             </ThemeProvider>
         </>
     )

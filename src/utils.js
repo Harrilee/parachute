@@ -7,6 +7,6 @@ export const PHONE_CONNECTION_STATUS = {
 
 export const LOCATION_SIMULATION_STATUS = {
     STOPPED: 'Stopped',
-    STARTED: 'Started',
+    COMPLETED: 'Completed',
     LOADING: 'Loading...',
 }
