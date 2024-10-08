@@ -1,17 +1,28 @@
 import React, { useEffect, useState } from 'react'
 
-import { PHONE_CONNECTION_STATUS } from '../utils.js'
+import { PHONE_CONNECTION_STATUS, LOCATION_SIMULATION_STATUS } from '../utils.js'
 
 import Dialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 
+import Button from '@mui/material/Button'
+import Snackbar from '@mui/material/Snackbar'
+import Alert from '@mui/material/Alert'
+
 import trustComputer from '../images/trust-computer.png'
 import enableDevMode from '../images/enable-devmode.png'
 
 export default function ControlCenter(props) {
-    const { longitude, latitude, phoneConnectionStatus, setPhoneConnectionStatus } = props
+    const {
+        longitude,
+        latitude,
+        phoneConnectionStatus,
+        setPhoneConnectionStatus,
+        locationSimulationStatus,
+        setLocationSimulationStatus,
+    } = props
 
     const [deviceName, setDeviceName] = useState()
 
@@ -31,6 +42,19 @@ export default function ControlCenter(props) {
         setOpenDevTips(true)
     }
 
+    // snackbar
+    const [snackbarOpen, setSnackbarOpen] = useState(false)
+    const [snackbarMessage, setSnackbarMessage] = useState('')
+    const [snackbarSeverity, setSnackbarSeverity] = useState('success')
+    const handleSnackbarOpen = (message, severity) => {
+        setSnackbarMessage(message)
+        setSnackbarSeverity(severity)
+        setSnackbarOpen(true)
+    }
+    const handleSnackbarClose = () => {
+        setSnackbarOpen(false)
+    }
+
     // check if developer mode is enabled
     function isDeveloperModeEnabled() {
         window.electronAPI.isDeveloperModeEnabled().then(isEnabled => {
@@ -40,6 +64,41 @@ export default function ControlCenter(props) {
                 setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_OFF)
             }
         })
+    }
+
+    function mockLocation() {
+        console.log(latitude, longitude)
+        if (latitude === '-' || longitude === '-') {
+            handleSnackbarOpen('请先在地图上选择一个位置', 'error')
+            return
+        }
+        setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.LOADING)
+        window.electronAPI
+            .mockLocation(latitude, longitude)
+            .then(res => {
+                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.COMPLETED)
+                handleSnackbarOpen('位置模拟成功', 'success')
+            })
+            .catch(e => {
+                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
+                console.error(e)
+                handleSnackbarOpen('位置模拟失败，请重试', 'error')
+            })
+    }
+
+    function restoreLocation() {
+        setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
+        window.electronAPI
+            .mockLocation(null, null)
+            .then(res => {
+                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
+                handleSnackbarOpen('已重置定位', 'success')
+            })
+            .catch(e => {
+                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
+                console.error(e)
+                handleSnackbarOpen('重置定位失败，请重试', 'error')
+            })
     }
 
     // handle IPC messages
@@ -80,8 +139,20 @@ export default function ControlCenter(props) {
             buttonText = '开发者模式'
             break
         case PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_ON:
-            buttonText = '模拟位置'
-            handleClick = () => alert('Not implemented')
+            switch (locationSimulationStatus) {
+                case LOCATION_SIMULATION_STATUS.STOPPED:
+                    buttonText = '模拟位置'
+                    handleClick = mockLocation
+                    break
+                case LOCATION_SIMULATION_STATUS.LOADING:
+                    buttonText = '加载中...'
+                    buttonDisabled = true
+                    break
+                case LOCATION_SIMULATION_STATUS.COMPLETED:
+                    buttonText = '还原位置'
+                    handleClick = restoreLocation
+                    break
+            }
             break
         default:
             break
@@ -133,6 +204,24 @@ export default function ControlCenter(props) {
                     </DialogContentText>
                 </DialogContent>
             </Dialog>
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={3000}
+                onClose={handleSnackbarClose}
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'center',
+                }}
+            >
+                <Alert
+                    onClose={handleSnackbarClose}
+                    severity={snackbarSeverity}
+                    variant="filled"
+                    sx={{ width: '100%' }}
+                >
+                    {snackbarMessage}
+                </Alert>
+            </Snackbar>
         </>
     )
 }

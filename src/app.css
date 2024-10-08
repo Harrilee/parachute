@@ -17,16 +17,17 @@ body {
     top: 12px;
     left: 12px;
     z-index: 10;
-    background-color: rgba(17, 19, 20, 0.4);
+    background-color: rgba(223, 230, 234, 0.5);
     backdrop-filter: blur(3px);
     border-radius: 4px;
     padding: 12px;
     max-width: 280px;
     width: 100%;
+    box-shadow: 1px 1px 1px 1px rgba(0, 0, 0, 0.05);
 }
 
 .float-toolbox p {
-    color: #e6e6e6;
+    color: #171717;
     font-size: 16px;
     margin: 4px 0;
     font-weight: 250;
@@ -42,7 +43,7 @@ p.info {
 }
 
 button {
-    background-color: #1a73e8;
+    background-color: #3183ee;
     color: white;
     border: none;
     border-radius: 4px;
