@@ -79,8 +79,8 @@ function sendToRenderer(channel, data) {
 async function mockLocation(_event, latitude, longitude) {
     const client = new PyMobileDevice3Client(PYTHON_PATH)
     if (latitude !== null && longitude !== null) {
-        await client.startTunnelD()
+        await client.mockLocation(latitude, longitude, 10)
+        return true
     }
-    await client.mockLocation(latitude, longitude, 10)
-    return true
+    return false
 }
