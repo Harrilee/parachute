@@ -6,12 +6,12 @@ Parachute is a cross-platform application that allows users to change the virtia
 
 -   [x] User interface for selecting location
 -   [x] Device connection, developer mode detection
--   [ ] Location mocking
--   [ ] Decouple Python from package
+-   [x] Location mocking
+-   [ ] More map providers (OpenStreetMap)
+-   [ ] Decouple Python from package, publish package
 -   [ ] Add support for Windows
 -   [ ] Light and dark mode support
 -   [ ] Multi-language support (Chinese, English, etc.)
--   [ ] More map providers (OpenStreetMap)
 
 ## Current Architecture
 
