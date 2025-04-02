@@ -7,7 +7,6 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 
-import Button from '@mui/material/Button'
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
 
@@ -161,8 +160,8 @@ export default function ControlCenter(props) {
         <>
             <div className="float-toolbox">
                 <p>{deviceName ? `已连接 ${deviceName}` : '等待 USB 设备连接'}</p>
-                <p className="info">经度: {longitude}</p>
-                <p className="info">维度: {latitude}</p>
+                <p className="info">经度: {longitude === '-' ? '-' : Math.round(longitude * 10e4) / 10e4}</p>
+                <p className="info">纬度: {latitude === '-' ? '-' : Math.round(latitude * 10e4) / 10e4}</p>
                 <button onClick={handleClick} disabled={buttonDisabled}>
                     {buttonText}
                 </button>
