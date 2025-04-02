@@ -80,9 +80,6 @@ class PyMobileDevice3Client {
         })
     }
 
-    /**
-     * @deprecated startTunnelD is not necessary when mock a location
-     */
     async startTunnelD() {
         const options = {
             name: 'Parachute Virtual Location',
