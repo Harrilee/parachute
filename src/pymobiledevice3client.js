@@ -1,8 +1,5 @@
 const { spawn, exec } = require('child_process')
 const { BrowserWindow } = require('electron')
-const path = require('node:path')
-const sudo = require('sudo-prompt')
-
 // // Create a write stream (append mode) to a file named 'app.log'
 // const fs = require('fs')
 // const logFile = fs.createWriteStream('app.log', { flags: 'a' })
@@ -84,22 +81,40 @@ class PyMobileDevice3Client {
         const options = {
             name: 'Parachute Virtual Location',
         }
-        this.tunneldProcess = sudo.exec(
-            `ps aux | grep 'pymobiledevice3 remote tunneld' | grep -v grep | awk '{print $2}' | xargs kill -9 && \
-            ${this.pythonPath} -m pymobiledevice3 remote tunneld`,
-            options,
-            (error, stdout, stderr) => {
-                if (error) {
-                    console.error(`exec error: ${error}`)
-                }
-                if (stdout) {
-                    console.log(`stdout: ${stdout}`)
-                }
-                if (stderr) {
-                    console.error(`stderr: ${stderr}`)
-                }
-            }
-        )
+        this.tunneldProcess = await new Promise((resolve, reject) => {
+            // Step 1: Kill existing `pymobiledevice3 remote tunneld` processes
+            const killCommand = `ps aux | grep 'pymobiledevice3 remote tunneld' | grep -v grep | awk '{print $2}' | xargs kill -9`
+
+            const kill = spawn(killCommand, {
+                shell: true,
+            })
+
+            kill.stdout.on('data', data => {
+                console.log(`kill stdout: ${data}`)
+            })
+
+            kill.stderr.on('data', data => {
+                console.error(`kill stderr: ${data}`)
+            })
+
+            kill.on('close', code => {
+                console.log(`Kill process exited with code ${code}`)
+
+                // Step 2: Start new pymobiledevice3 remote tunneld process
+                const pythonPath = 'python3' // or your custom Python path
+                const start = spawn(pythonPath, ['-m', 'pymobiledevice3', 'remote', 'tunneld'])
+
+                start.stderr.on('data', data => {
+                    if (`${data}`.includes('Created tunnel')) {
+                        console.log('TunnelD started')
+                        resolve('tunneld started')
+                    } else if (`${data}`.includes('rror')) {
+                        console.error(`stderr: ${data}`)
+                        reject(data)
+                    }
+                })
+            })
+        })
     }
 
     async mockLocation(latitude, longitude, retry = 0) {
@@ -118,12 +133,11 @@ class PyMobileDevice3Client {
             }
             const childProcess = spawn(`${this.pythonPath}`, params)
             childProcess.stdout.on('data', data => {
-                if (data) console.log(`stdout: ${data}`)
                 resolve('mocked')
             })
             childProcess.stderr.on('data', async data => {
-                if (retry === 0) {
-                    reject(data)
+                if (retry === -1) {
+                    reject(`[maxinum retry] stderr: ${data}`)
                 } else {
                     try {
                         console.log(`Retrying... ${retry}`)
@@ -132,7 +146,7 @@ class PyMobileDevice3Client {
                         resolve('mocked')
                     } catch (error) {
                         console.error(`stderr: ${data}`)
-                        reject(error)
+                        reject(`stderr: ${data}`)
                     }
                 }
             })

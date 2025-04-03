@@ -1,9 +1,8 @@
+import { exit } from 'node:process'
 import PyMobileDevice3Client from './pymobiledevice3client'
 
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
-const { exec } = require('child_process')
-
 
 // // Create a write stream (append mode) to a file named 'app.log'
 // const fs = require('fs')
@@ -81,6 +80,6 @@ async function mockLocation(_event, latitude, longitude) {
     if (latitude !== null && longitude !== null) {
         await client.startTunnelD()
     }
-    await client.mockLocation(latitude, longitude, 10)
+    await client.mockLocation(latitude, longitude, 0)
     return true
 }
