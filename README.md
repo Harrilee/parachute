@@ -20,8 +20,18 @@ Parachute is a cross-platform application that allows users to change the virtia
 | Frontend      | Electron, React, Webpack, MUI                                                            |
 | Backend       | Bundled Python ([pymobiledevice3](https://github.com/doronz88/pymobiledevice3)), Node.js |
 | Communication | Electron IPC                                                                             |
-| Map           | AMap                                                                                     |
+| Map           | AMap, Open Street Map                                                                    |
 
 ## Development
 
 Run `setup.sh` to install dependencies and Python virtual environment. Then run `npm start` to start the application.
+
+## Quick Start Guide
+
+While production usage is not supported, developers can test the feature by
+
+```bash
+sudo npm start
+```
+
+Note that `sudo` is required by connection to iDevices.
