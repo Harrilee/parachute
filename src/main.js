@@ -4,8 +4,10 @@ import PyMobileDevice3Client from './pymobiledevice3client'
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 
+const fs = require('fs')
+
 // // Create a write stream (append mode) to a file named 'app.log'
-// const fs = require('fs')
+
 // const logFile = fs.createWriteStream('app.log', { flags: 'a' })
 // // Redirect console.log output to the file
 // console.log = message => {
@@ -20,7 +22,13 @@ if (require('electron-squirrel-startup')) {
     app.quit()
 }
 
-const PYTHON_PATH = path.join(app.getAppPath(), 'src', 'venv', 'bin', 'python3')
+let PYTHON_PATH = path.join(app.getAppPath(), 'src', 'venv', 'bin', 'python3')
+// if path does not exist, try ../venv/bin/python3
+if (!fs.existsSync(PYTHON_PATH)) {
+    PYTHON_PATH = path.join(app.getAppPath(), '..', 'venv', 'bin', 'python3')
+}
+
+console.log(`Python Path: ${PYTHON_PATH}`)
 
 const createWindow = () => {
     const mainWindow = new BrowserWindow({
@@ -32,7 +40,7 @@ const createWindow = () => {
     })
 
     mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY)
-    mainWindow.webContents.openDevTools()
+    // mainWindow.webContents.openDevTools()
 }
 app.whenReady().then(() => {
     /* IPC Registration */
