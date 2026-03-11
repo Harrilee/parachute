@@ -1,19 +1,12 @@
+
 # Parachute
 
-Parachute is a cross-platform application that allows users to change the virtual location of their iPhone and iPad. It is targeted on MacOS, Windows, and Linux, and compatible with latest iOS 26 version.
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/0a0b6d2b-7f96-4a1a-8e50-28ecd1fe8861" />
 
-## Planned Features and Roadmap
 
--   [x] User interface for selecting location
--   [x] Device connection, developer mode detection
--   [x] Location mocking
--   [x] More map providers (OpenStreetMap)
--   [x] Decouple Python from package (replaced with [go-ios](https://github.com/danielpaulus/go-ios))
--   [ ] Icons
--   [ ] Elegant sudo enablement
--   [ ] Add support for Windows
--   [ ] Light and dark mode support
--   [ ] Multi-language support (Chinese, English, etc.)
+
+
+Parachute is a macOS application that allows users to change the virtual location of their iPhone and iPad. It is compatible with latest iOS 26 version.
 
 ## Current Architecture
 
