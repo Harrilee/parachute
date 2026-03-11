@@ -1,7 +1,8 @@
 
 # Parachute
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/5f2f02e0-eadd-4bf8-a064-9e0c10b48c0e" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/0a0b6d2b-7f96-4a1a-8e50-28ecd1fe8861" />
+
 
 
 
