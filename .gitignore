@@ -94,5 +94,5 @@ typings/
 out/
 
 
-# Python
-venv
+# go-ios pairing identity (machine-specific secret keys)
+selfIdentity.plist
