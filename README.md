@@ -24,6 +24,29 @@ Parachute is a cross-platform application that allows users to change the virtua
 | Communication | Electron IPC                                                             |
 | Map           | AMap, Open Street Map                                                    |
 
+## Installation
+
+Download the latest release from the [GitHub Releases](https://github.com/Harrilee/parachute/releases) page.
+
+| File | Architecture |
+| ---- | ------------ |
+| `parachute-*-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
+| `parachute-*-x64.zip` | Intel |
+
+### macOS
+
+1. Download the `.dmg` (Apple Silicon) or `.zip` (Intel) for your Mac.
+2. Open the DMG and drag **Parachute** to your Applications folder, or extract the zip.
+3. On first launch, macOS may block the unsigned app. Go to **System Settings > Privacy & Security** and click **Open Anyway**.
+4. The app requires administrator privileges for USB device tunneling on iOS 17+. You will be prompted for your password on launch.
+
+## Usage
+
+1. Connect your iPhone via USB and trust the computer.
+2. Enable developer mode if prompted.
+3. Pick a location on the map.
+4. Click the button to mock or restore your location.
+
 ## Development
 
 Install dependencies and start the application:
@@ -33,15 +56,23 @@ npm install
 sudo npm start
 ```
 
-Note that `sudo` is required for USB device tunneling on iOS 17+ devices.
+`sudo` is required for USB device tunneling on iOS 17+ devices.
 
-## Quick Start Guide
+### Building locally
 
 ```bash
-sudo npm start
+npm run make
 ```
 
-1. Connect your iPhone via USB and trust the computer.
-2. Enable developer mode if prompted.
-3. Pick a location on the map.
-4. Click the button to mock or restore your location.
+Distributable artifacts are written to `out/make/`.
+
+### Releasing
+
+Push a version tag to trigger the CI/CD pipeline:
+
+```bash
+npm version patch   # or minor / major
+git push --follow-tags
+```
+
+The [GitHub Actions workflow](.github/workflows/release.yml) builds macOS binaries for both arm64 and x64, then uploads them to a GitHub Release.
