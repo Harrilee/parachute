@@ -13,6 +13,7 @@ const binaryName = os.platform() === 'win32' ? 'ios.exe' : 'ios'
 module.exports = {
     packagerConfig: {
         asar: true,
+        icon: path.join(__dirname, 'icon'),
         extraResource: [
             path.join('node_modules', 'go-ios', 'dist', folderName, binaryName),
         ],
