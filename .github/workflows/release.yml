@@ -28,14 +28,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: parachute-macos-arm64
-          path: |
-            out/make/**/*.zip
-            out/make/**/*.dmg
+          path: out/make/**/*.zip
 
       - name: Upload to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            out/make/**/*.zip
-            out/make/**/*.dmg
+          files: out/make/**/*.zip

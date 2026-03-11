@@ -1,8 +1,10 @@
 const { spawn, execFile, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
+const { app } = require('electron')
 
-const logFile = fs.createWriteStream('app.log', { flags: 'a' })
+const logPath = path.join(app.getPath('userData'), 'app.log')
+const logFile = fs.createWriteStream(logPath, { flags: 'a' })
 console.log = message => {
   logFile.write(`LOG ${new Date().toISOString()} - ${message}\n`)
 }
