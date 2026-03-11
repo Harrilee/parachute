@@ -8,14 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
-            arch: arm64
-          - os: macos-13
-            arch: x64
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:
@@ -26,7 +19,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build macOS app
         run: npm run make
@@ -34,7 +27,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: parachute-macos-${{ matrix.arch }}
+          name: parachute-macos-arm64
           path: |
             out/make/**/*.zip
             out/make/**/*.dmg

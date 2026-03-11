@@ -28,14 +28,9 @@ Parachute is a cross-platform application that allows users to change the virtua
 
 Download the latest release from the [GitHub Releases](https://github.com/Harrilee/parachute/releases) page.
 
-| File | Architecture |
-| ---- | ------------ |
-| `parachute-*-arm64.dmg` | Apple Silicon (M1/M2/M3/M4) |
-| `parachute-*-x64.zip` | Intel |
+### macOS (Apple Silicon)
 
-### macOS
-
-1. Download the `.dmg` (Apple Silicon) or `.zip` (Intel) for your Mac.
+1. Download the `.dmg` or `.zip` from the latest release.
 2. Open the DMG and drag **Parachute** to your Applications folder, or extract the zip.
 3. On first launch, macOS may block the unsigned app. Go to **System Settings > Privacy & Security** and click **Open Anyway**.
 4. The app requires administrator privileges for USB device tunneling on iOS 17+. You will be prompted for your password on launch.
@@ -75,4 +70,4 @@ npm version patch   # or minor / major
 git push --follow-tags
 ```
 
-The [GitHub Actions workflow](.github/workflows/release.yml) builds macOS binaries for both arm64 and x64, then uploads them to a GitHub Release.
+The [GitHub Actions workflow](.github/workflows/release.yml) builds a macOS arm64 binary and uploads it to a GitHub Release.
