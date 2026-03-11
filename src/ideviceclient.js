@@ -48,11 +48,23 @@ class IDeviceClient {
     this.binaryPath = resolveGoIosBinary()
     this.tunnelProcess = null
     this.deviceNameCache = {}
+    this._killOrphanedProcesses()
+  }
+
+  _killOrphanedProcesses() {
+    try {
+      execSync(
+        "ps aux | grep -E 'ios (tunnel|setlocation|resetlocation)' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null",
+        { stdio: 'ignore' },
+      )
+    } catch (_) {
+      // no orphaned processes
+    }
   }
 
   _exec(args, timeout = 15000) {
     return new Promise((resolve, reject) => {
-      execFile(this.binaryPath, args, { timeout }, (error, stdout, stderr) => {
+      execFile(this.binaryPath, args, { timeout, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
         if (error) {
           console.error(`go-ios exec error (${args.join(' ')}): ${error.message}`)
           reject(error)
@@ -143,14 +155,7 @@ class IDeviceClient {
       }
     }
 
-    try {
-      execSync(
-        "ps aux | grep 'ios tunnel' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null",
-        { stdio: 'ignore' },
-      )
-    } catch (_) {
-      // no existing tunnel process
-    }
+    this._killOrphanedProcesses()
 
     return new Promise((resolve, reject) => {
       console.log('Starting go-ios tunnel...')
@@ -162,10 +167,6 @@ class IDeviceClient {
       const onOutput = data => {
         const text = data.toString()
         console.log(`tunnel: ${text}`)
-        if (!resolved && text.toLowerCase().includes('tunnel')) {
-          resolved = true
-          resolve('tunnel started')
-        }
       }
 
       this.tunnelProcess.stdout.on('data', onOutput)
@@ -183,7 +184,23 @@ class IDeviceClient {
       this.tunnelProcess.on('close', code => {
         console.log(`tunnel process exited with code ${code}`)
         this.tunnelProcess = null
+        if (!resolved) {
+          resolved = true
+          if (code !== 0) {
+            reject(new Error(`tunnel process exited with code ${code}`))
+          } else {
+            resolve('tunnel closed')
+          }
+        }
       })
+
+      // If the process is still alive after 2s, the tunnel is running
+      setTimeout(() => {
+        if (!resolved && this.tunnelProcess) {
+          resolved = true
+          resolve('tunnel started')
+        }
+      }, 2000)
 
       setTimeout(() => {
         if (!resolved) {
@@ -194,23 +211,59 @@ class IDeviceClient {
     })
   }
 
-  async mockLocation(latitude, longitude, retry = 0) {
+  _spawnWithHangDetection(args, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      const child = spawn(this.binaryPath, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+
+      let resolved = false
+      let output = ''
+
+      const onData = data => {
+        output += data.toString()
+      }
+
+      child.stdout.on('data', onData)
+      child.stderr.on('data', onData)
+
+      child.on('close', code => {
+        if (resolved) return
+        resolved = true
+        console.log(`${args[0]} exited with code ${code}: ${output}`)
+        if (code === 0) {
+          resolve('done')
+        } else {
+          reject(new Error(`${args[0]} failed: ${output}`))
+        }
+      })
+
+      child.on('error', err => {
+        if (resolved) return
+        resolved = true
+        reject(err)
+      })
+
+      // go-ios hangs after successfully completing location operations;
+      // if the process is still running after timeoutMs, treat as success
+      setTimeout(() => {
+        if (resolved) return
+        resolved = true
+        child.kill('SIGKILL')
+        console.log(`${args[0]} still running after ${timeoutMs}ms, assuming success`)
+        resolve('done')
+      }, timeoutMs)
+    })
+  }
+
+  async mockLocation(latitude, longitude) {
     if (latitude !== null && longitude !== null) {
       console.log(`Setting location: ${latitude}, ${longitude}`)
-      try {
-        await this._exec(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`])
-        return 'mocked'
-      } catch (error) {
-        if (retry > 0) {
-          console.log(`Retrying setlocation... attempts left: ${retry}`)
-          await new Promise(r => setTimeout(r, 2000))
-          return this.mockLocation(latitude, longitude, retry - 1)
-        }
-        throw error
-      }
+      await this._spawnWithHangDetection(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`])
+      return 'mocked'
     } else {
       console.log('Resetting location')
-      await this._exec(['resetlocation'])
+      await this._spawnWithHangDetection(['resetlocation'])
       return 'reset'
     }
   }
