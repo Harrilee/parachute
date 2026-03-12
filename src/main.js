@@ -21,7 +21,16 @@ const createWindow = () => {
     mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY)
     // mainWindow.webContents.openDevTools()
 }
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+    try {
+        await client.ensureAdminAccess()
+    } catch (err) {
+        console.warn(`Admin access setup failed: ${err.message}`)
+    }
+    client.startTunnel().catch(err => {
+        console.warn(`Tunnel start at launch failed: ${err.message}`)
+    })
+
     /* IPC Registration */
     // Renderer to Main (two-way communication)
     ipcMain.handle('is-developer-mode-enabled', isDeveloperModeEnabled)
