@@ -17,6 +17,17 @@ module.exports = {
         extraResource: [
             path.join('node_modules', 'go-ios', 'dist', folderName, binaryName),
         ],
+        osxSign: {
+            optionsForFile: () => ({
+                entitlements: path.join(__dirname, 'entitlements.plist'),
+                entitlementsInherit: path.join(__dirname, 'entitlements.child.plist'),
+            }),
+        },
+        osxNotarize: {
+            appleId: process.env.APPLE_ID,
+            appleIdPassword: process.env.APPLE_PASSWORD,
+            teamId: process.env.APPLE_TEAM_ID,
+        },
     },
     rebuildConfig: {},
     makers: [
