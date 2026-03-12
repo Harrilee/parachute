@@ -47,6 +47,7 @@ class IDeviceClient {
   constructor() {
     this.binaryPath = resolveGoIosBinary()
     this.tunnelProcess = null
+    this._tunnelPromise = null
     this.deviceNameCache = {}
     this._killOrphanedProcesses()
   }
@@ -60,6 +61,43 @@ class IDeviceClient {
     } catch (_) {
       // no orphaned processes
     }
+  }
+
+  _execAsAdmin(cmd, timeout = 15000) {
+    return new Promise((resolve, reject) => {
+      const prompt = 'Parachute needs administrator access to communicate with your iOS device.'
+      const osaScript = `do shell script ${JSON.stringify(cmd)} with prompt ${JSON.stringify(prompt)} with administrator privileges`
+      execFile('osascript', ['-e', osaScript], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
+        if (error) {
+          if (error.killed) {
+            resolve('')
+            return
+          }
+          reject(error)
+          return
+        }
+        resolve(stdout.trim())
+      })
+    })
+  }
+
+  async ensureAdminAccess() {
+    if (process.platform !== 'darwin') return
+
+    try {
+      const output = execSync(`sudo -n '${this.binaryPath}' version 2>&1 || true`, { timeout: 5000 }).toString()
+      if (!output.includes('sudo: a password is required')) {
+        console.log('Admin access verified for current binary')
+        return
+      }
+    } catch (_) {}
+
+    console.log('Requesting admin access (one-time setup)...')
+    const user = process.env.USER
+    const sudoersContent = `${user} ALL=(ALL) NOPASSWD: ${this.binaryPath}`
+    const cmd = `TMPFILE=$(mktemp) && printf '%s\\n' '${sudoersContent}' > "$TMPFILE" && /usr/sbin/visudo -c -f "$TMPFILE" 2>/dev/null && mv "$TMPFILE" /etc/sudoers.d/parachute && chmod 440 /etc/sudoers.d/parachute`
+    await this._execAsAdmin(cmd, 30000)
+    console.log('Admin access configured')
   }
 
   _exec(args, timeout = 15000) {
@@ -140,23 +178,92 @@ class IDeviceClient {
     }
   }
 
+  _isTunnelRunning() {
+    return this.tunnelProcess !== null
+  }
+
   async startTunnel() {
-    if (this.tunnelProcess) {
+    if (this._tunnelPromise) {
+      return this._tunnelPromise
+    }
+
+    if (this._isTunnelRunning()) {
       console.log('Tunnel already running')
       return 'tunnel already running'
     }
 
-    if (process.platform === 'darwin') {
-      try {
-        execSync('pkill -SIGSTOP remoted', { stdio: 'ignore' })
-        console.log('Paused remoted process')
-      } catch (_) {
-        // remoted may not be running
-      }
-    }
-
     this._killOrphanedProcesses()
 
+    if (process.platform === 'darwin') {
+      this._tunnelPromise = this._startTunnelMacOS().finally(() => {
+        this._tunnelPromise = null
+      })
+      return this._tunnelPromise
+    }
+
+    return this._startTunnelDirect()
+  }
+
+  _startTunnelMacOS() {
+    try {
+      execSync('pkill -SIGSTOP remoted', { stdio: 'ignore' })
+      console.log('Paused remoted process')
+    } catch (_) {}
+
+    return new Promise((resolve, reject) => {
+      console.log('Starting go-ios tunnel with sudo...')
+      this.tunnelProcess = spawn('sudo', ['-n', this.binaryPath, 'tunnel', 'start'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+
+      let resolved = false
+      const onOutput = data => {
+        const text = data.toString()
+        console.log(`tunnel: ${text}`)
+      }
+
+      this.tunnelProcess.stdout.on('data', onOutput)
+      this.tunnelProcess.stderr.on('data', onOutput)
+
+      this.tunnelProcess.on('error', err => {
+        console.error(`tunnel error: ${err}`)
+        this.tunnelProcess = null
+        if (!resolved) {
+          resolved = true
+          reject(err)
+        }
+      })
+
+      this.tunnelProcess.on('close', code => {
+        console.log(`tunnel process exited with code ${code}`)
+        this.tunnelProcess = null
+        if (!resolved) {
+          resolved = true
+          if (code !== 0) {
+            reject(new Error(`tunnel process exited with code ${code}`))
+          } else {
+            resolve('tunnel closed')
+          }
+        }
+      })
+
+      setTimeout(() => {
+        if (!resolved && this.tunnelProcess) {
+          resolved = true
+          resolve('tunnel started')
+        }
+      }, 3000)
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          resolve('tunnel started (timeout)')
+        }
+      }, 30000)
+    })
+  }
+
+  _startTunnelDirect() {
     return new Promise((resolve, reject) => {
       console.log('Starting go-ios tunnel...')
       this.tunnelProcess = spawn(this.binaryPath, ['tunnel', 'start'], {
@@ -194,7 +301,6 @@ class IDeviceClient {
         }
       })
 
-      // If the process is still alive after 2s, the tunnel is running
       setTimeout(() => {
         if (!resolved && this.tunnelProcess) {
           resolved = true
@@ -212,10 +318,11 @@ class IDeviceClient {
   }
 
   _spawnWithHangDetection(args, timeoutMs = 5000) {
+    const useSudo = process.platform === 'darwin'
     return new Promise((resolve, reject) => {
-      const child = spawn(this.binaryPath, args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
+      const child = useSudo
+        ? spawn('sudo', ['-n', this.binaryPath, ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
+        : spawn(this.binaryPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
 
       let resolved = false
       let output = ''
