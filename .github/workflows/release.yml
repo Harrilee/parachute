@@ -59,6 +59,31 @@ jobs:
           KEYCHAIN_PATH: ${{ runner.temp }}/app-signing.keychain-db
         run: npm run make -- --arch=${{ matrix.arch }}
 
+      - name: Notarize and staple pkg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          shopt -s nullglob
+          PKG_FILES=(out/make/**/*.pkg)
+          if [ ${#PKG_FILES[@]} -eq 0 ]; then
+            echo "No pkg files found to notarize"
+            exit 1
+          fi
+
+          for pkg in "${PKG_FILES[@]}"; do
+            echo "Notarizing $pkg"
+            xcrun notarytool submit "$pkg" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+
+            echo "Stapling $pkg"
+            xcrun stapler staple "$pkg"
+          done
+
       - name: Cleanup keychain
         if: always()
         run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
