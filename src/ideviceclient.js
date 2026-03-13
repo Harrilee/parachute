@@ -46,11 +46,28 @@ function resolveGoIosBinary() {
 class IDeviceClient {
   constructor() {
     this.binaryPath = resolveGoIosBinary()
+    this.runtimeDir = path.join(app.getPath('userData'), 'go-ios-runtime')
+    fs.mkdirSync(this.runtimeDir, { recursive: true })
     this.tunnelProcess = null
     this.locationProcess = null
     this._tunnelPromise = null
     this.deviceNameCache = {}
     this._killOrphanedProcesses()
+  }
+
+  _goIosExecOptions(timeout = 15000) {
+    return {
+      timeout,
+      killSignal: 'SIGKILL',
+      cwd: this.runtimeDir,
+    }
+  }
+
+  _goIosSpawnOptions() {
+    return {
+      cwd: this.runtimeDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
   }
 
   _killOrphanedProcesses() {
@@ -150,7 +167,7 @@ class IDeviceClient {
 
   _exec(args, timeout = 15000) {
     return new Promise((resolve, reject) => {
-      execFile(this.binaryPath, args, { timeout, killSignal: 'SIGKILL' }, (error, stdout, stderr) => {
+      execFile(this.binaryPath, args, this._goIosExecOptions(timeout), (error, stdout, stderr) => {
         if (error) {
           console.error(`go-ios exec error (${args.join(' ')}): ${error.message}`)
           reject(error)
@@ -270,9 +287,7 @@ class IDeviceClient {
 
     return new Promise((resolve, reject) => {
       console.log('Starting go-ios tunnel with sudo...')
-      this.tunnelProcess = spawn('sudo', ['-n', this.binaryPath, 'tunnel', 'start'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
+      this.tunnelProcess = spawn('sudo', ['-n', this.binaryPath, 'tunnel', 'start'], this._goIosSpawnOptions())
 
       let resolved = false
       const onOutput = data => {
@@ -328,9 +343,7 @@ class IDeviceClient {
   _startTunnelDirect() {
     return new Promise((resolve, reject) => {
       console.log('Starting go-ios tunnel...')
-      this.tunnelProcess = spawn(this.binaryPath, ['tunnel', 'start'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
+      this.tunnelProcess = spawn(this.binaryPath, ['tunnel', 'start'], this._goIosSpawnOptions())
 
       let resolved = false
       const onOutput = data => {
@@ -413,12 +426,8 @@ class IDeviceClient {
       this._stopLocationProcess()
 
       const child = useSudo
-        ? spawn('sudo', ['-n', this.binaryPath, ...args], {
-            stdio: ['ignore', 'pipe', 'pipe'],
-          })
-        : spawn(this.binaryPath, args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-          })
+        ? spawn('sudo', ['-n', this.binaryPath, ...args], this._goIosSpawnOptions())
+        : spawn(this.binaryPath, args, this._goIosSpawnOptions())
 
       this.locationProcess = child
       let resolved = false
