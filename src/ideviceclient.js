@@ -47,6 +47,7 @@ class IDeviceClient {
   constructor() {
     this.binaryPath = resolveGoIosBinary()
     this.tunnelProcess = null
+    this.locationProcess = null
     this._tunnelPromise = null
     this.deviceNameCache = {}
     this._killOrphanedProcesses()
@@ -54,10 +55,18 @@ class IDeviceClient {
 
   _killOrphanedProcesses() {
     try {
-      execSync(
-        "ps aux | grep -E 'ios (tunnel|setlocation|resetlocation)' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null",
-        { stdio: 'ignore' },
-      )
+      if (process.platform === 'darwin') {
+        const escapedPath = this.binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        execSync(
+          `sudo -n /usr/bin/pkill -9 -f "${escapedPath} (tunnel start|setlocation)"`,
+          { stdio: 'ignore' },
+        )
+      } else {
+        execSync(
+          "ps aux | grep -E 'ios (tunnel|setlocation)' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null",
+          { stdio: 'ignore' },
+        )
+      }
     } catch (_) {
       // no orphaned processes
     }
@@ -66,17 +75,40 @@ class IDeviceClient {
   _execAsAdmin(cmd, timeout = 15000) {
     return new Promise((resolve, reject) => {
       const prompt = 'Parachute needs administrator access to communicate with your iOS device.'
-      const osaScript = `do shell script ${JSON.stringify(cmd)} with prompt ${JSON.stringify(prompt)} with administrator privileges`
-      execFile('osascript', ['-e', osaScript], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
-        if (error) {
-          if (error.killed) {
-            resolve('')
-            return
+      const script = `do shell script ${JSON.stringify(cmd)} with prompt ${JSON.stringify(prompt)} with administrator privileges`
+
+      const appDir = path.join(app.getPath('userData'), 'admin-helper')
+      const appPath = path.join(appDir, 'Parachute.app')
+
+      try { fs.rmSync(appPath, { recursive: true, force: true }) } catch (_) {}
+      fs.mkdirSync(appDir, { recursive: true })
+
+      const runWithOsascript = () => {
+        execFile('osascript', ['-e', script], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
+          if (error) {
+            if (error.killed) { resolve(''); return }
+            reject(error); return
           }
-          reject(error)
+          resolve(stdout.trim())
+        })
+      }
+
+      execFile('osacompile', ['-o', appPath, '-e', script], { timeout: 10000 }, compileErr => {
+        if (compileErr) {
+          console.warn('osacompile failed, falling back to osascript')
+          runWithOsascript()
           return
         }
-        resolve(stdout.trim())
+
+        const applet = path.join(appPath, 'Contents', 'MacOS', 'applet')
+        execFile(applet, [], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
+          try { fs.rmSync(appPath, { recursive: true, force: true }) } catch (_) {}
+          if (error) {
+            if (error.killed) { resolve(''); return }
+            reject(error); return
+          }
+          resolve((stdout || '').trim())
+        })
       })
     })
   }
@@ -85,8 +117,12 @@ class IDeviceClient {
     if (process.platform !== 'darwin') return
 
     try {
-      const output = execSync(`sudo -n '${this.binaryPath}' version 2>&1 || true`, { timeout: 5000 }).toString()
-      if (!output.includes('sudo: a password is required')) {
+      const verifyCmd = [
+        `sudo -n -l '${this.binaryPath}' >/dev/null 2>&1`,
+        'sudo -n -l /usr/bin/pkill >/dev/null 2>&1',
+      ].join(' && ')
+      execSync(verifyCmd, { timeout: 5000, stdio: 'ignore' })
+      {
         console.log('Admin access verified for current binary')
         return
       }
@@ -94,7 +130,7 @@ class IDeviceClient {
 
     console.log('Requesting admin access (one-time setup)...')
     const user = process.env.USER
-    const sudoersContent = `${user} ALL=(ALL) NOPASSWD: ${this.binaryPath}`
+    const sudoersContent = `${user} ALL=(ALL) NOPASSWD: ${this.binaryPath}, /usr/bin/pkill`
     const cmd = `TMPFILE=$(mktemp) && printf '%s\\n' '${sudoersContent}' > "$TMPFILE" && /usr/sbin/visudo -c -f "$TMPFILE" 2>/dev/null && mv "$TMPFILE" /etc/sudoers.d/parachute && chmod 440 /etc/sudoers.d/parachute`
     await this._execAsAdmin(cmd, 30000)
     console.log('Admin access configured')
@@ -195,9 +231,19 @@ class IDeviceClient {
     this._killOrphanedProcesses()
 
     if (process.platform === 'darwin') {
-      this._tunnelPromise = this._startTunnelMacOS().finally(() => {
-        this._tunnelPromise = null
-      })
+      this._tunnelPromise = this._startTunnelMacOS()
+        .catch(async error => {
+          const message = error?.message || ''
+          if (message.includes('address already in use')) {
+            console.warn('Tunnel port already in use, cleaning up and retrying once')
+            this._killOrphanedProcesses()
+            return this._startTunnelMacOS()
+          }
+          throw error
+        })
+        .finally(() => {
+          this._tunnelPromise = null
+        })
       return this._tunnelPromise
     }
 
@@ -220,6 +266,10 @@ class IDeviceClient {
       const onOutput = data => {
         const text = data.toString()
         console.log(`tunnel: ${text}`)
+        if (!resolved && text.includes('Tunnel server started')) {
+          resolved = true
+          resolve('tunnel started')
+        }
       }
 
       this.tunnelProcess.stdout.on('data', onOutput)
@@ -317,26 +367,82 @@ class IDeviceClient {
     })
   }
 
-  _spawnWithHangDetection(args, timeoutMs = 5000) {
+  _killLocationProcesses(commandName) {
+    try {
+      if (process.platform === 'darwin') {
+        const escapedPath = this.binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        execSync(`sudo -n /usr/bin/pkill -9 -f "${escapedPath} ${commandName}"`, { stdio: 'ignore' })
+      } else {
+        execSync(
+          `ps aux | grep -E "ios ${commandName}" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null`,
+          { stdio: 'ignore' },
+        )
+      }
+    } catch (_) {
+      // process already gone
+    }
+  }
+
+  _stopLocationProcess() {
+    if (this.locationProcess) {
+      try {
+        this.locationProcess.kill('SIGKILL')
+      } catch (_) {
+        // already exited
+      }
+      this.locationProcess = null
+    }
+    this._killLocationProcesses('setlocation')
+  }
+
+  _startLocationSession(args, readyTimeoutMs = 1500) {
     const useSudo = process.platform === 'darwin'
     return new Promise((resolve, reject) => {
-      const child = useSudo
-        ? spawn('sudo', ['-n', this.binaryPath, ...args], { stdio: ['ignore', 'pipe', 'pipe'] })
-        : spawn(this.binaryPath, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+      this._stopLocationProcess()
 
+      const child = useSudo
+        ? spawn('sudo', ['-n', this.binaryPath, ...args], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+        : spawn(this.binaryPath, args, {
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+
+      this.locationProcess = child
       let resolved = false
       let output = ''
+      const readyTimer = setTimeout(() => {
+        if (resolved) return
+        resolved = true
+        console.log(`${args[0]} session started`)
+        resolve('done')
+      }, readyTimeoutMs)
 
       const onData = data => {
         output += data.toString()
+        if (
+          output.includes('"level":"fatal"') ||
+          output.includes('sudo: a password is required') ||
+          output.includes('InvalidService')
+        ) {
+          if (resolved) return
+          resolved = true
+          clearTimeout(readyTimer)
+          this._stopLocationProcess()
+          reject(new Error(`${args[0]} failed: ${output}`))
+        }
       }
 
       child.stdout.on('data', onData)
       child.stderr.on('data', onData)
 
-      child.on('close', code => {
+      child.on('exit', code => {
+        if (this.locationProcess === child) {
+          this.locationProcess = null
+        }
         if (resolved) return
         resolved = true
+        clearTimeout(readyTimer)
         console.log(`${args[0]} exited with code ${code}: ${output}`)
         if (code === 0) {
           resolve('done')
@@ -346,33 +452,25 @@ class IDeviceClient {
       })
 
       child.on('error', err => {
+        if (this.locationProcess === child) {
+          this.locationProcess = null
+        }
         if (resolved) return
         resolved = true
+        clearTimeout(readyTimer)
         reject(err)
       })
-
-      // go-ios hangs after successfully completing location operations;
-      // if the process is still running after timeoutMs, treat as success
-      setTimeout(() => {
-        if (resolved) return
-        resolved = true
-        child.kill('SIGKILL')
-        console.log(`${args[0]} still running after ${timeoutMs}ms, assuming success`)
-        resolve('done')
-      }, timeoutMs)
     })
   }
 
   async mockLocation(latitude, longitude) {
-    if (latitude !== null && longitude !== null) {
-      console.log(`Setting location: ${latitude}, ${longitude}`)
-      await this._spawnWithHangDetection(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`])
-      return 'mocked'
-    } else {
-      console.log('Resetting location')
-      await this._spawnWithHangDetection(['resetlocation'])
-      return 'reset'
-    }
+    console.log(`Setting location: ${latitude}, ${longitude}`)
+    await this._startLocationSession(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`])
+    return 'mocked'
+  }
+
+  cleanup() {
+    this._stopLocationProcess()
   }
 }
 

@@ -25,7 +25,9 @@ app.whenReady().then(async () => {
     try {
         await client.ensureAdminAccess()
     } catch (err) {
-        console.warn(`Admin access setup failed: ${err.message}`)
+        console.error(`Admin access is required. Quitting: ${err.message}`)
+        app.quit()
+        return
     }
     client.startTunnel().catch(err => {
         console.warn(`Tunnel start at launch failed: ${err.message}`)
@@ -58,6 +60,10 @@ app.on('window-all-closed', () => {
     }
 })
 
+app.on('before-quit', () => {
+    client.cleanup()
+})
+
 async function isDeveloperModeEnabled() {
     const isEnabled = await client.isDeveloperModeEnabled()
     return isEnabled
@@ -70,11 +76,7 @@ function sendToRenderer(channel, data) {
 }
 
 async function mockLocation(_event, latitude, longitude) {
-    try {
-        await client.startTunnel()
-    } catch (err) {
-        console.warn(`startTunnel failed, proceeding with mockLocation: ${err.message}`)
-    }
+    await client.startTunnel()
     await client.mockLocation(latitude, longitude)
     return true
 }
