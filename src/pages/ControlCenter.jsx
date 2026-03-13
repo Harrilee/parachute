@@ -76,27 +76,12 @@ export default function ControlCenter(props) {
             .mockLocation(latitude, longitude)
             .then(res => {
                 setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.COMPLETED)
-                handleSnackbarOpen('位置模拟成功', 'success')
+                handleSnackbarOpen('位置设置成功，断开连接/重启后自动恢复', 'success')
             })
             .catch(e => {
                 setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
                 console.error(e)
                 handleSnackbarOpen('位置模拟失败，请重试', 'error')
-            })
-    }
-
-    function restoreLocation() {
-        setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
-        window.electronAPI
-            .mockLocation(null, null)
-            .then(res => {
-                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
-                handleSnackbarOpen('已重置定位', 'success')
-            })
-            .catch(e => {
-                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
-                console.error(e)
-                handleSnackbarOpen('重置定位失败，请重试', 'error')
             })
     }
 
@@ -148,8 +133,8 @@ export default function ControlCenter(props) {
                     buttonDisabled = true
                     break
                 case LOCATION_SIMULATION_STATUS.COMPLETED:
-                    buttonText = '还原位置'
-                    handleClick = restoreLocation
+                    buttonText = '更新位置'
+                    handleClick = mockLocation
                     break
             }
             break

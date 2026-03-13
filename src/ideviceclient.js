@@ -57,12 +57,12 @@ class IDeviceClient {
       if (process.platform === 'darwin') {
         const escapedPath = this.binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         execSync(
-          `sudo -n /usr/bin/pkill -9 -f "${escapedPath} (tunnel start|setlocation|resetlocation)"`,
+          `sudo -n /usr/bin/pkill -9 -f "${escapedPath} (tunnel start|setlocation)"`,
           { stdio: 'ignore' },
         )
       } else {
         execSync(
-          "ps aux | grep -E 'ios (tunnel|setlocation|resetlocation)' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null",
+          "ps aux | grep -E 'ios (tunnel|setlocation)' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null",
           { stdio: 'ignore' },
         )
       }
@@ -445,15 +445,9 @@ class IDeviceClient {
   }
 
   async mockLocation(latitude, longitude) {
-    if (latitude !== null && longitude !== null) {
-      console.log(`Setting location: ${latitude}, ${longitude}`)
-      await this._spawnWithHangDetection(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`], 3000)
-      return 'mocked'
-    } else {
-      console.log('Resetting location')
-      await this._spawnWithHangDetection(['resetlocation'], 3000)
-      return 'reset'
-    }
+    console.log(`Setting location: ${latitude}, ${longitude}`)
+    await this._spawnWithHangDetection(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`], 300000)
+    return 'mocked'
   }
 }
 
