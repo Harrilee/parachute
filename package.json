@@ -3,6 +3,10 @@
     "productName": "parachute",
     "version": "0.2.1",
     "description": "My Electron application description",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Harrilee/parachute.git"
+    },
     "main": ".webpack/main",
     "scripts": {
         "start": "electron-forge start",
@@ -16,6 +20,7 @@
         "@babel/preset-react": "^7.25.7",
         "@electron-forge/cli": "^7.5.0",
         "@electron-forge/maker-deb": "^7.5.0",
+        "@electron-forge/maker-pkg": "^7.11.1",
         "@electron-forge/maker-rpm": "^7.5.0",
         "@electron-forge/maker-squirrel": "^7.5.0",
         "@electron-forge/maker-zip": "^7.5.0",
@@ -48,6 +53,7 @@
         "go-ios": "^1.0.188",
         "leaflet": "^1.9.4",
         "react": "^18.3.1",
-        "react-dom": "^18.3.1"
+        "react-dom": "^18.3.1",
+        "update-electron-app": "^3.1.2"
     }
 }
