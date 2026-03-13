@@ -65,14 +65,13 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          shopt -s nullglob
-          PKG_FILES=(out/make/**/*.pkg)
-          if [ ${#PKG_FILES[@]} -eq 0 ]; then
+          PKG_COUNT=$(find out/make -name '*.pkg' -type f | wc -l | tr -d ' ')
+          if [ "$PKG_COUNT" = "0" ]; then
             echo "No pkg files found to notarize"
             exit 1
           fi
 
-          for pkg in "${PKG_FILES[@]}"; do
+          find out/make -name '*.pkg' -type f -print0 | while IFS= read -r -d '' pkg; do
             echo "Notarizing $pkg"
             xcrun notarytool submit "$pkg" \
               --apple-id "$APPLE_ID" \
