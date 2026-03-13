@@ -60,6 +60,10 @@ app.on('window-all-closed', () => {
     }
 })
 
+app.on('before-quit', () => {
+    client.cleanup()
+})
+
 async function isDeveloperModeEnabled() {
     const isEnabled = await client.isDeveloperModeEnabled()
     return isEnabled

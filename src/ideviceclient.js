@@ -47,6 +47,7 @@ class IDeviceClient {
   constructor() {
     this.binaryPath = resolveGoIosBinary()
     this.tunnelProcess = null
+    this.locationProcess = null
     this._tunnelPromise = null
     this.deviceNameCache = {}
     this._killOrphanedProcesses()
@@ -117,9 +118,8 @@ class IDeviceClient {
 
     try {
       const verifyCmd = [
-        `sudo -n '${this.binaryPath}' version >/dev/null 2>&1`,
-        'sudo -n /bin/kill -0 $$ >/dev/null 2>&1',
-        "sudo -n /usr/bin/pkill -f '^$' >/dev/null 2>&1; code=$?; [ $code -eq 0 ] || [ $code -eq 1 ]",
+        `sudo -n -l '${this.binaryPath}' >/dev/null 2>&1`,
+        'sudo -n -l /usr/bin/pkill >/dev/null 2>&1',
       ].join(' && ')
       execSync(verifyCmd, { timeout: 5000, stdio: 'ignore' })
       {
@@ -130,7 +130,7 @@ class IDeviceClient {
 
     console.log('Requesting admin access (one-time setup)...')
     const user = process.env.USER
-    const sudoersContent = `${user} ALL=(ALL) NOPASSWD: ${this.binaryPath}, /bin/kill, /usr/bin/pkill`
+    const sudoersContent = `${user} ALL=(ALL) NOPASSWD: ${this.binaryPath}, /usr/bin/pkill`
     const cmd = `TMPFILE=$(mktemp) && printf '%s\\n' '${sudoersContent}' > "$TMPFILE" && /usr/sbin/visudo -c -f "$TMPFILE" 2>/dev/null && mv "$TMPFILE" /etc/sudoers.d/parachute && chmod 440 /etc/sudoers.d/parachute`
     await this._execAsAdmin(cmd, 30000)
     console.log('Admin access configured')
@@ -367,66 +367,82 @@ class IDeviceClient {
     })
   }
 
-  _killCommandTree(child, useSudo = false) {
-    if (!child?.pid) return
-
+  _killLocationProcesses(commandName) {
     try {
-      process.kill(-child.pid, 'SIGKILL')
-      return
-    } catch (_) {
-      // fall back below if group kill is not permitted
-    }
-
-    if (useSudo && process.platform === 'darwin') {
-      try {
-        execSync(`sudo -n /bin/kill -9 -- -${child.pid}`, { stdio: 'ignore' })
-        return
-      } catch (_) {
-        // fall back to killing the wrapper if root children cannot be reached
+      if (process.platform === 'darwin') {
+        const escapedPath = this.binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        execSync(`sudo -n /usr/bin/pkill -9 -f "${escapedPath} ${commandName}"`, { stdio: 'ignore' })
+      } else {
+        execSync(
+          `ps aux | grep -E "ios ${commandName}" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null`,
+          { stdio: 'ignore' },
+        )
       }
-    }
-
-    try {
-      child.kill('SIGKILL')
     } catch (_) {
       // process already gone
     }
   }
 
-  _spawnWithHangDetection(args, timeoutMs = 5000) {
+  _stopLocationProcess() {
+    if (this.locationProcess) {
+      try {
+        this.locationProcess.kill('SIGKILL')
+      } catch (_) {
+        // already exited
+      }
+      this.locationProcess = null
+    }
+    this._killLocationProcesses('setlocation')
+  }
+
+  _startLocationSession(args, readyTimeoutMs = 1500) {
     const useSudo = process.platform === 'darwin'
     return new Promise((resolve, reject) => {
+      this._stopLocationProcess()
+
       const child = useSudo
         ? spawn('sudo', ['-n', this.binaryPath, ...args], {
             stdio: ['ignore', 'pipe', 'pipe'],
-            detached: true,
           })
         : spawn(this.binaryPath, args, {
             stdio: ['ignore', 'pipe', 'pipe'],
-            detached: true,
           })
 
+      this.locationProcess = child
       let resolved = false
       let output = ''
-      const timeout = setTimeout(() => {
+      const readyTimer = setTimeout(() => {
         if (resolved) return
         resolved = true
-        this._killCommandTree(child, useSudo)
-        console.log(`${args[0]} still running after ${timeoutMs}ms, assuming success`)
+        console.log(`${args[0]} session started`)
         resolve('done')
-      }, timeoutMs)
+      }, readyTimeoutMs)
 
       const onData = data => {
         output += data.toString()
+        if (
+          output.includes('"level":"fatal"') ||
+          output.includes('sudo: a password is required') ||
+          output.includes('InvalidService')
+        ) {
+          if (resolved) return
+          resolved = true
+          clearTimeout(readyTimer)
+          this._stopLocationProcess()
+          reject(new Error(`${args[0]} failed: ${output}`))
+        }
       }
 
       child.stdout.on('data', onData)
       child.stderr.on('data', onData)
 
-      child.on('close', code => {
+      child.on('exit', code => {
+        if (this.locationProcess === child) {
+          this.locationProcess = null
+        }
         if (resolved) return
         resolved = true
-        clearTimeout(timeout)
+        clearTimeout(readyTimer)
         console.log(`${args[0]} exited with code ${code}: ${output}`)
         if (code === 0) {
           resolve('done')
@@ -436,9 +452,12 @@ class IDeviceClient {
       })
 
       child.on('error', err => {
+        if (this.locationProcess === child) {
+          this.locationProcess = null
+        }
         if (resolved) return
         resolved = true
-        clearTimeout(timeout)
+        clearTimeout(readyTimer)
         reject(err)
       })
     })
@@ -446,8 +465,12 @@ class IDeviceClient {
 
   async mockLocation(latitude, longitude) {
     console.log(`Setting location: ${latitude}, ${longitude}`)
-    await this._spawnWithHangDetection(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`], 300000)
+    await this._startLocationSession(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`])
     return 'mocked'
+  }
+
+  cleanup() {
+    this._stopLocationProcess()
   }
 }
 
