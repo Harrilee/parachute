@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 
 import { PHONE_CONNECTION_STATUS, LOCATION_SIMULATION_STATUS } from '../utils.js'
 
@@ -36,6 +36,7 @@ export default function ControlCenter(props) {
     }
     const handleCloseDevTips = () => {
         setOpenDevTips(false)
+        devModeChecked.current = false
     }
     const handleOpenDevTips = () => {
         setOpenDevTips(true)
@@ -56,11 +57,15 @@ export default function ControlCenter(props) {
 
     // check if developer mode is enabled
     function isDeveloperModeEnabled() {
-        window.electronAPI.isDeveloperModeEnabled().then(isEnabled => {
-            if (isEnabled.includes('true')) {
+        window.electronAPI.isDeveloperModeEnabled().then(status => {
+            if (status === 'true') {
                 setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_ON)
-            } else {
+            } else if (status === 'false') {
                 setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_OFF)
+            } else if (status === 'unpaired') {
+                setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CONNECTED_UNTRUSTED)
+            } else {
+                setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CABLE_CONNECTED)
             }
         })
     }
@@ -85,24 +90,36 @@ export default function ControlCenter(props) {
             })
     }
 
-    // handle IPC messages
-    let devicesCache = ''
+    const lastDeviceUdid = useRef(null)
+    const devModeChecked = useRef(false)
+
     useEffect(() => {
-        window.electronAPI.onDeviceListUpdate(devices => {
-            if (devices === devicesCache) {
-                return
-            }
-            devicesCache = devices
+        const handler = devices => {
             const usbDevices = JSON.parse(devices).filter(device => device.ConnectionType === 'USB')
             if (usbDevices.length > 0) {
-                setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CABLE_CONNECTED)
-                setDeviceName(usbDevices[0].DeviceName)
-                isDeveloperModeEnabled()
+                const device = usbDevices[0]
+                const udid = device.Udid || device.udid || ''
+                setDeviceName(device.DeviceName || 'iOS Device')
+
+                if (device.PairingStatus === 'unpaired') {
+                    setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
+                    setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CONNECTED_UNTRUSTED)
+                    devModeChecked.current = false
+                    lastDeviceUdid.current = udid
+                } else if (udid !== lastDeviceUdid.current || !devModeChecked.current) {
+                    lastDeviceUdid.current = udid
+                    devModeChecked.current = true
+                    isDeveloperModeEnabled()
+                }
             } else {
+                setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.STOPPED)
                 setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.DISCONNECTED)
                 setDeviceName('')
+                devModeChecked.current = false
+                lastDeviceUdid.current = null
             }
-        })
+        }
+        window.electronAPI.onDeviceListUpdate(handler)
     }, [])
 
     // get button text
@@ -117,6 +134,10 @@ export default function ControlCenter(props) {
         case PHONE_CONNECTION_STATUS.CABLE_CONNECTED:
             buttonText = '模拟位置'
             buttonDisabled = true
+            break
+        case PHONE_CONNECTION_STATUS.CONNECTED_UNTRUSTED:
+            buttonText = '信任设备'
+            handleClick = handleOpenConnectionTips
             break
         case PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_OFF:
             handleClick = handleOpenDevTips
@@ -144,7 +165,13 @@ export default function ControlCenter(props) {
     return (
         <>
             <div className="float-toolbox">
-                <p>{deviceName ? `已连接 ${deviceName}` : '等待 USB 设备连接'}</p>
+                <p>
+                    {deviceName
+                        ? phoneConnectionStatus === PHONE_CONNECTION_STATUS.CONNECTED_UNTRUSTED
+                            ? `请在手机上点击“信任”按钮`
+                            : `已连接 ${deviceName}`
+                        : '等待 USB 设备连接'}
+                </p>
                 <p className="info">经度: {longitude === '-' ? '-' : Math.round(longitude * 10e4) / 10e4}</p>
                 <p className="info">纬度: {latitude === '-' ? '-' : Math.round(latitude * 10e4) / 10e4}</p>
                 <button onClick={handleClick} disabled={buttonDisabled}>
@@ -179,9 +206,8 @@ export default function ControlCenter(props) {
                         <div style={{ display: 'flex', gap: '4px' }}>
                             <div>
                                 <p>开发者模式是一种允许您在手机上调试应用程序的模式，是开启位置模拟功能的必要条件。</p>
-                                <p>1. 打开设置，找到“隐私与安全性”</p>
-                                <p>2. 滑动到页面的最下方，打开“开发者模式”</p>
-                                <p>3. 重启手机进入开发者模式</p>
+                                <p>1. 打开设置，搜索“开发者模式”并启用（iOS 18 后该设置已自动隐藏）</p>
+                                <p>2. 重启手机进入开发者模式</p>
                             </div>
                             <img src={enableDevMode} alt="Enable dev mode" width={200} />
                         </div>
