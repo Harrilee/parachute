@@ -46,6 +46,7 @@ app.whenReady().then(async () => {
     /* IPC Registration */
     // Renderer to Main (two-way communication)
     ipcMain.handle('is-developer-mode-enabled', isDeveloperModeEnabled)
+    ipcMain.handle('enable-developer-mode', enableDeveloperMode)
     ipcMain.handle('mock-location', mockLocation)
     // Main to Renderer
     setInterval(async () => {
@@ -77,6 +78,10 @@ app.on('before-quit', () => {
 async function isDeveloperModeEnabled() {
     const isEnabled = await client.isDeveloperModeEnabled()
     return isEnabled
+}
+
+async function enableDeveloperMode() {
+    return await client.enableDeveloperMode()
 }
 
 function sendToRenderer(channel, data) {

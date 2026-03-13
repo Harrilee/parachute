@@ -47,11 +47,22 @@ If Parachute is useful to you, please consider supporting its development via [G
 
 ## Development
 
-Install dependencies and start the application:
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 20+
+- [Go](https://go.dev/) 1.22+ (`brew install go`)
+
+### Getting started
 
 ```bash
-npm install
+npm install    # installs deps and builds go-ios binary into bin/
 sudo npm start
+```
+
+`npm install` automatically clones and compiles [go-ios](https://github.com/Harrilee/go-ios) (branch `v1.0.204`) via the `postinstall` script. To force a rebuild:
+
+```bash
+FORCE_REBUILD=1 ./scripts/download-go-ios.sh
 ```
 
 `sudo` is required for USB device tunneling on iOS 17+ devices.

@@ -94,5 +94,8 @@ typings/
 out/
 
 
+# go-ios binary (downloaded or built locally)
+bin/
+
 # go-ios pairing identity (machine-specific secret keys)
 selfIdentity.plist

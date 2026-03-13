@@ -43,11 +43,22 @@ Parachute 是一个 macOS 应用，可以帮助用户修改 iPhone 和 iPad 的�
 
 ## 开发
 
-安装依赖并启动应用：
+### 前置条件
+
+- [Node.js](https://nodejs.org/) 20+
+- [Go](https://go.dev/) 1.22+（`brew install go`）
+
+### 快速开始
 
 ```bash
-npm install
+npm install    # 安装依赖并自动编译 go-ios 到 bin/
 sudo npm start
+```
+
+`npm install` 会通过 `postinstall` 脚本自动克隆并编译 [go-ios](https://github.com/Harrilee/go-ios)（分支 `v1.0.204`）。如需强制重新编译：
+
+```bash
+FORCE_REBUILD=1 ./scripts/download-go-ios.sh
 ```
 
 `sudo` 用于支持 iOS 17+ 设备的 USB 隧道能力。
