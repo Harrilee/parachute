@@ -21,25 +21,21 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
-
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
-      - name: Build go-ios from source
+      - name: Install dependencies
+        run: npm install
+
+      - name: Cross-compile go-ios for target arch
         run: |
           case "${{ matrix.arch }}" in
             arm64) GOARCH="arm64" ;;
             x64)   GOARCH="amd64" ;;
           esac
-          git clone --depth 1 --branch v1.0.204 https://github.com/Harrilee/go-ios.git /tmp/go-ios
-          cd /tmp/go-ios
-          go work use .
-          GOOS=darwin GOARCH="$GOARCH" CGO_ENABLED=0 \
-            go build -trimpath -ldflags="-s -w" -o "$GITHUB_WORKSPACE/bin/ios" ./main.go
-          chmod +x "$GITHUB_WORKSPACE/bin/ios"
+          FORCE_REBUILD=1 GOOS=darwin GOARCH="$GOARCH" CGO_ENABLED=0 \
+            bash scripts/download-go-ios.sh
 
       - name: Import signing certificates
         env:
