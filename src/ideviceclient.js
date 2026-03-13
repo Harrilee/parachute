@@ -1,4 +1,4 @@
-const { spawn, execFile, execSync } = require('child_process')
+const { spawn, execFile, execFileSync, execSync } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const { app } = require('electron')
@@ -117,15 +117,27 @@ class IDeviceClient {
     if (process.platform !== 'darwin') return
 
     try {
-      const verifyCmd = [
-        `sudo -n -l '${this.binaryPath}' >/dev/null 2>&1`,
-        'sudo -n -l /usr/bin/pkill >/dev/null 2>&1',
-      ].join(' && ')
-      execSync(verifyCmd, { timeout: 5000, stdio: 'ignore' })
-      {
-        console.log('Admin access verified for current binary')
-        return
-      }
+      execFileSync('sudo', ['-n', this.binaryPath, 'version'], {
+        timeout: 5000,
+        stdio: 'ignore',
+      })
+
+      const pkill = spawn('sudo', ['-n', '/usr/bin/pkill', '-f', '^$'], {
+        stdio: 'ignore',
+      })
+      await new Promise((resolve, reject) => {
+        pkill.on('error', reject)
+        pkill.on('exit', code => {
+          if (code === 0 || code === 1) {
+            resolve()
+            return
+          }
+          reject(new Error(`pkill verification failed with code ${code}`))
+        })
+      })
+
+      console.log('Admin access verified for current binary')
+      return
     } catch (_) {}
 
     console.log('Requesting admin access (one-time setup)...')
