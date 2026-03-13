@@ -72,11 +72,7 @@ function sendToRenderer(channel, data) {
 }
 
 async function mockLocation(_event, latitude, longitude) {
-    try {
-        await client.startTunnel()
-    } catch (err) {
-        console.warn(`startTunnel failed, proceeding with mockLocation: ${err.message}`)
-    }
+    await client.startTunnel()
     await client.mockLocation(latitude, longitude)
     return true
 }
