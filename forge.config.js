@@ -40,6 +40,13 @@ module.exports = {
             platforms: ['darwin'],
         },
         {
+            name: '@electron-forge/maker-pkg',
+            platforms: ['darwin'],
+            config: {
+                keychain: process.env.PKG_KEYCHAIN || process.env.KEYCHAIN_PATH,
+            },
+        },
+        {
             name: '@electron-forge/maker-deb',
             config: {},
         },

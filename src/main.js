@@ -1,10 +1,20 @@
 import IDeviceClient from './ideviceclient'
 
 const { app, BrowserWindow, ipcMain } = require('electron')
+const { updateElectronApp, UpdateSourceType } = require('update-electron-app')
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
     app.quit()
+}
+
+if (app.isPackaged) {
+    updateElectronApp({
+        updateSource: {
+            type: UpdateSourceType.ElectronPublicUpdateService,
+            repo: 'Harrilee/parachute',
+        },
+    })
 }
 
 const client = new IDeviceClient()
