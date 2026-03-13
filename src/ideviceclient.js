@@ -66,17 +66,40 @@ class IDeviceClient {
   _execAsAdmin(cmd, timeout = 15000) {
     return new Promise((resolve, reject) => {
       const prompt = 'Parachute needs administrator access to communicate with your iOS device.'
-      const osaScript = `do shell script ${JSON.stringify(cmd)} with prompt ${JSON.stringify(prompt)} with administrator privileges`
-      execFile('osascript', ['-e', osaScript], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
-        if (error) {
-          if (error.killed) {
-            resolve('')
-            return
+      const script = `do shell script ${JSON.stringify(cmd)} with prompt ${JSON.stringify(prompt)} with administrator privileges`
+
+      const appDir = path.join(app.getPath('userData'), 'admin-helper')
+      const appPath = path.join(appDir, 'Parachute.app')
+
+      try { fs.rmSync(appPath, { recursive: true, force: true }) } catch (_) {}
+      fs.mkdirSync(appDir, { recursive: true })
+
+      const runWithOsascript = () => {
+        execFile('osascript', ['-e', script], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
+          if (error) {
+            if (error.killed) { resolve(''); return }
+            reject(error); return
           }
-          reject(error)
+          resolve(stdout.trim())
+        })
+      }
+
+      execFile('osacompile', ['-o', appPath, '-e', script], { timeout: 10000 }, compileErr => {
+        if (compileErr) {
+          console.warn('osacompile failed, falling back to osascript')
+          runWithOsascript()
           return
         }
-        resolve(stdout.trim())
+
+        const applet = path.join(appPath, 'Contents', 'MacOS', 'applet')
+        execFile(applet, [], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
+          try { fs.rmSync(appPath, { recursive: true, force: true }) } catch (_) {}
+          if (error) {
+            if (error.killed) { resolve(''); return }
+            reject(error); return
+          }
+          resolve((stdout || '').trim())
+        })
       })
     })
   }

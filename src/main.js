@@ -25,7 +25,9 @@ app.whenReady().then(async () => {
     try {
         await client.ensureAdminAccess()
     } catch (err) {
-        console.warn(`Admin access setup failed: ${err.message}`)
+        console.error(`Admin access is required. Quitting: ${err.message}`)
+        app.quit()
+        return
     }
     client.startTunnel().catch(err => {
         console.warn(`Tunnel start at launch failed: ${err.message}`)
