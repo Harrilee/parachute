@@ -193,6 +193,26 @@ class IDeviceClient {
   }
 
   async listDevices() {
+    const toDeviceEntry = item => {
+      if (typeof item === 'string') {
+        return {
+          Udid: item,
+          ConnectionType: 'USB',
+          DeviceName: 'iOS Device',
+          PairingStatus: 'unpaired',
+        }
+      }
+
+      const udid = item.Udid || item.udid || item.SerialNumber || ''
+      return {
+        ...item,
+        Udid: udid,
+        ConnectionType: item.ConnectionType || 'USB',
+        DeviceName: item.DeviceName || item.ProductType || 'iOS Device',
+        PairingStatus: item.PairingStatus || 'paired',
+      }
+    }
+
     try {
       const output = await this._exec(['list', '--details'])
       const data = JSON.parse(output)
@@ -209,6 +229,7 @@ class IDeviceClient {
             ...d,
             ConnectionType: 'USB',
             DeviceName: this.deviceNameCache[udid] || d.ProductType || 'iOS Device',
+            PairingStatus: 'paired',
           }
         }),
       )
@@ -216,30 +237,42 @@ class IDeviceClient {
       return JSON.stringify(enriched)
     } catch (error) {
       console.error(`listDevices error: ${error}`)
-      return '[]'
+      try {
+        const output = await this._exec(['list'])
+        const data = JSON.parse(output)
+        const devices = data.deviceList || (Array.isArray(data) ? data : [])
+        return JSON.stringify(devices.map(toDeviceEntry))
+      } catch (fallbackError) {
+        console.error(`listDevices fallback error: ${fallbackError}`)
+        return '[]'
+      }
     }
   }
 
   async isDeveloperModeEnabled() {
     try {
       const output = await this._exec(['devmode', 'get'])
+      console.log(`devmode get output: ${output}`)
       const lower = output.toLowerCase()
-      if (lower.includes('true') || lower.includes('enabled')) {
+      if (lower.includes('enabled: true') || lower.includes('devmode: true') || lower === 'true') {
         return 'true'
       }
-      this.enableDeveloperMode()
-      return 'false'
+      if (lower.includes('enabled: false') || lower.includes('devmode: false') || lower === 'false') {
+        return 'false'
+      }
+      return 'unknown'
     } catch (error) {
       console.error(`isDeveloperModeEnabled error: ${error}`)
-      return 'false'
-    }
-  }
-
-  async enableDeveloperMode() {
-    try {
-      await this._exec(['devmode', 'enable'], 30000)
-    } catch (error) {
-      console.error(`enableDeveloperMode error: ${error}`)
+      const message = `${error.message || error}`.toLowerCase()
+      if (
+        message.includes('readpair failed') ||
+        message.includes('is the device paired') ||
+        message.includes('invalidhostid') ||
+        message.includes('lockdown')
+      ) {
+        return 'unpaired'
+      }
+      return 'unknown'
     }
   }
 

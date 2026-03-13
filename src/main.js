@@ -86,6 +86,10 @@ function sendToRenderer(channel, data) {
 }
 
 async function mockLocation(_event, latitude, longitude) {
+    const developerModeStatus = await client.isDeveloperModeEnabled()
+    if (developerModeStatus !== 'true') {
+        throw new Error(`Developer Mode is required before mocking location (${developerModeStatus})`)
+    }
     await client.startTunnel()
     await client.mockLocation(latitude, longitude)
     return true
