@@ -95,10 +95,23 @@ jobs:
             out/make/**/*.zip
             out/make/**/*.pkg
 
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: parachute-macos-*
+          path: release-assets
+          merge-multiple: true
+
       - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            out/make/**/*.zip
-            out/make/**/*.pkg
+            release-assets/**/*.zip
+            release-assets/**/*.pkg
