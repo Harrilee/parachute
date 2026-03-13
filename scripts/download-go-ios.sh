@@ -24,7 +24,8 @@ git clone --depth 1 --branch "$BRANCH" "$REPO" "$TMPDIR/go-ios"
 
 cd "$TMPDIR/go-ios"
 go work use .
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o "$TMPDIR/ios" ./main.go
+GOOS="${GOOS:-$(go env GOOS)}" GOARCH="${GOARCH:-$(go env GOARCH)}" CGO_ENABLED=0 \
+  go build -trimpath -ldflags="-s -w" -o "$TMPDIR/ios" ./main.go
 
 mkdir -p "$BIN_DIR"
 mv "$TMPDIR/ios" "$DEST"
