@@ -55,7 +55,6 @@ export default function ControlCenter(props) {
         setSnackbarOpen(false)
     }
 
-    // check if developer mode is enabled
     function isDeveloperModeEnabled() {
         window.electronAPI.isDeveloperModeEnabled().then(status => {
             if (status === 'true') {
@@ -68,6 +67,20 @@ export default function ControlCenter(props) {
                 setPhoneConnectionStatus(PHONE_CONNECTION_STATUS.CABLE_CONNECTED)
             }
         })
+    }
+
+    function enableDeveloperMode() {
+        handleOpenDevTips()
+        window.electronAPI.enableDeveloperMode()
+            .then(() => {
+                handleSnackbarOpen('开发者模式已启用，请在手机上确认并重启设备', 'success')
+                devModeChecked.current = false
+                isDeveloperModeEnabled()
+            })
+            .catch(e => {
+                console.error(e)
+                handleSnackbarOpen('启用开发者模式失败，请在设置中手动开启', 'warning')
+            })
     }
 
     function mockLocation() {
@@ -140,7 +153,7 @@ export default function ControlCenter(props) {
             handleClick = handleOpenConnectionTips
             break
         case PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_OFF:
-            handleClick = handleOpenDevTips
+            handleClick = enableDeveloperMode
             buttonText = '开发者模式'
             break
         case PHONE_CONNECTION_STATUS.CONNECTED_DEVELOPER_MODE_ON:
@@ -206,7 +219,7 @@ export default function ControlCenter(props) {
                         <div style={{ display: 'flex', gap: '4px' }}>
                             <div>
                                 <p>开发者模式是一种允许您在手机上调试应用程序的模式，是开启位置模拟功能的必要条件。</p>
-                                <p>1. 打开设置，搜索“开发者模式”并启用（iOS 18 后该设置已自动隐藏）</p>
+                                <p>1. 打开设置，搜索“开发者模式”并启用（或者设置 -&gt; 隐私与安全性 -&gt; 开发者模式）</p>
                                 <p>2. 重启手机进入开发者模式</p>
                             </div>
                             <img src={enableDevMode} alt="Enable dev mode" width={200} />

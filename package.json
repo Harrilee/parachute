@@ -9,6 +9,7 @@
     },
     "main": ".webpack/main",
     "scripts": {
+        "postinstall": "bash scripts/download-go-ios.sh",
         "start": "electron-forge start",
         "package": "electron-forge package",
         "make": "electron-forge make",
@@ -50,7 +51,6 @@
         "@emotion/styled": "^11.13.0",
         "@mui/material": "^6.1.2",
         "electron-squirrel-startup": "^1.0.1",
-        "go-ios": "^1.0.188",
         "leaflet": "^1.9.4",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",

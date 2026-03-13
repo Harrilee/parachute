@@ -15,19 +15,12 @@ console.warn = message => {
   logFile.write(`WRN ${new Date().toISOString()} - ${message}\n`)
 }
 
-const ARCH_MAP = { x64: 'amd64', arm64: 'arm64' }
-const PLATFORM_MAP = { darwin: 'darwin', linux: 'linux', win32: 'windows' }
-
 function resolveGoIosBinary() {
-  const platform = process.platform
-  const arch = process.arch
-  const binaryName = platform === 'win32' ? 'ios.exe' : 'ios'
-  const goPlatform = PLATFORM_MAP[platform]
-  const goArch = ARCH_MAP[arch] || 'amd64'
-  const folderName = `go-ios-${goPlatform}-${goArch}_${goPlatform}_${goArch}`
+  const binaryName = process.platform === 'win32' ? 'ios.exe' : 'ios'
 
   const candidates = [
-    path.join(process.cwd(), 'node_modules', 'go-ios', 'dist', folderName, binaryName),
+    path.join(__dirname, '..', 'bin', binaryName),
+    path.join(process.cwd(), 'bin', binaryName),
     process.resourcesPath && path.join(process.resourcesPath, binaryName),
   ].filter(Boolean)
 
@@ -39,7 +32,7 @@ function resolveGoIosBinary() {
   }
 
   throw new Error(
-    `go-ios binary not found for ${platform}/${arch}. Searched:\n${candidates.join('\n')}`,
+    `go-ios binary not found. Run scripts/download-go-ios.sh first.\nSearched:\n${candidates.join('\n')}`,
   )
 }
 
@@ -253,6 +246,13 @@ class IDeviceClient {
     try {
       const output = await this._exec(['devmode', 'get'])
       console.log(`devmode get output: ${output}`)
+
+      try {
+        const json = JSON.parse(output.trim().split('\n').pop())
+        if (json.DeveloperModeEnabled === true) return 'true'
+        if (json.DeveloperModeEnabled === false) return 'false'
+      } catch (_) {}
+
       const lower = output.toLowerCase()
       if (lower.includes('enabled: true') || lower.includes('devmode: true') || lower === 'true') {
         return 'true'
@@ -273,6 +273,24 @@ class IDeviceClient {
         return 'unpaired'
       }
       return 'unknown'
+    }
+  }
+
+  async enableDeveloperMode() {
+    console.log('Enabling developer mode...')
+    try {
+      await this._exec(['devmode', 'reveal'], 15000)
+      console.log('Developer mode toggle revealed in Settings')
+    } catch (err) {
+      console.warn(`devmode reveal failed (may already be visible): ${err.message}`)
+    }
+    try {
+      const output = await this._exec(['devmode', 'enable'], 30000)
+      console.log(`devmode enable output: ${output}`)
+      return 'enabled'
+    } catch (error) {
+      console.error(`enableDeveloperMode error: ${error}`)
+      throw error
     }
   }
 
