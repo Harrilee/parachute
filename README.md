@@ -1,6 +1,8 @@
 
 # Parachute
 
+English | [简体中文](./README.zh-CN.md)
+
 [![GitHub Release](https://img.shields.io/github/v/release/Harrilee/parachute)](https://github.com/Harrilee/parachute/releases)
 ![License](https://img.shields.io/github/license/Harrilee/parachute)
 ![Platform](https://img.shields.io/badge/platform-macOS-blue)
