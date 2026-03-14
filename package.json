@@ -1,7 +1,7 @@
 {
   "name": "parachute",
   "productName": "Parachute",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "My Electron application description",
   "repository": {
     "type": "git",
