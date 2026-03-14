@@ -237,7 +237,7 @@ class IDeviceClient {
           return {
             ...d,
             ConnectionType: 'USB',
-            DeviceName: this.deviceNameCache[udid] || d.ProductType || 'iOS Device',
+            DeviceName: this.deviceNameCache[udid] || 'iOS Device',
             PairingStatus: 'paired',
           }
         }),
