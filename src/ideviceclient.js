@@ -258,14 +258,13 @@ class IDeviceClient {
         usbOnly.map(async d => {
           const udid = d.Udid || d.udid || ''
           if (udid && !this.deviceNameCache[udid]) {
-            const name = await this._fetchDeviceName(udid)
+            const name = d.DeviceName || await this._fetchDeviceName(udid)
             if (name) this.deviceNameCache[udid] = name
           }
           return {
             ...d,
             ConnectionType: 'USB',
-            DeviceName:
-              this.deviceNameCache[udid] || d.ProductType || 'iOS Device',
+            DeviceName: this.deviceNameCache[udid] || 'iOS Device',
             PairingStatus: 'paired',
           }
         }),
