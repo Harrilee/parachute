@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AMap from './pages/AMap.jsx'
 import OpenStreetMap from './pages/OpenStreetMap.jsx'
