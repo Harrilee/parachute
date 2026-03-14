@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import layerBlack from '../images/layer-black.png'
 import amapLogo from '../images/amap.png'
 import openStreetMapLogo from '../images/openstreetmap.png'

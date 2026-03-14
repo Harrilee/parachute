@@ -31,7 +31,7 @@ export default [
       'react/prop-types': 'off',
       'no-unused-vars': ['warn', {
         argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
+        varsIgnorePattern: '^(_|React$)',
         caughtErrorsIgnorePattern: '^_',
       }],
       'react/jsx-uses-vars': 'error',
