@@ -16,12 +16,8 @@ jobs:
         with:
           node-version: 20
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
       - name: Install dependencies
-        run: npm install
+        run: npm install --ignore-scripts
 
-      - name: Run ESLint
+      - name: Lint
         run: npm run lint
