@@ -129,3 +129,38 @@ button:disabled {
     margin-top: 12px;
     width: 100%;
 }
+
+.locate-btn {
+    position: absolute;
+    bottom: 24px;
+    right: 12px;
+    z-index: 500;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(223, 230, 234, 0.8);
+    backdrop-filter: blur(3px);
+    color: #171717;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 1px 1px 1px 1px rgba(0, 0, 0, 0.05);
+}
+
+.locate-btn:hover {
+    background-color: rgba(200, 210, 216, 0.9);
+}
+
+.locate-btn:disabled {
+    background-color: rgba(223, 230, 234, 0.8);
+    color: #999;
+    cursor: wait;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
