@@ -191,21 +191,14 @@ class IDeviceClient {
 
   _exec(args, timeout = 15000) {
     return new Promise((resolve, reject) => {
-      execFile(
-        this.binaryPath,
-        args,
-        this._goIosExecOptions(timeout),
-        (error, stdout, _stderr) => {
-          if (error) {
-            console.error(
-              `go-ios exec error (${args.join(' ')}): ${error.message}`,
-            )
-            reject(error)
-            return
-          }
-          resolve(stdout.trim())
-        },
-      )
+      execFile(this.binaryPath, args, this._goIosExecOptions(timeout), (error, stdout, stderr) => {
+        if (error) {
+          console.error(`go-ios exec error (${args.join(' ')}): ${error.message}`)
+          reject(error)
+          return
+        }
+        resolve(stdout.trim())
+      })
     })
   }
 
@@ -244,7 +237,7 @@ class IDeviceClient {
           return {
             ...d,
             ConnectionType: 'USB',
-            DeviceName: this.deviceNameCache[udid] || 'iOS Device',
+            DeviceName: this.deviceNameCache[udid] || d.ProductType || 'iOS Device',
             PairingStatus: 'paired',
           }
         }),
