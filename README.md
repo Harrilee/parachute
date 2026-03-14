@@ -4,7 +4,7 @@
 English | [简体中文](./README.zh-CN.md)
 
 [![GitHub Release](https://img.shields.io/github/v/release/Harrilee/parachute)](https://github.com/Harrilee/parachute/releases)
-![License](https://img.shields.io/github/license/Harrilee/parachute)
+![License](https://camo.githubusercontent.com/234d91288de379a53976a1a22b2b9eb4830eeeece700a3a0d754e5013b2714e5/68747470733a2f2f696d672e736869656c64732e696f2f6769746875622f6c6963656e73652f48617272696c65652f7061726163687574653f)
 ![Platform](https://img.shields.io/badge/platform-macOS-blue)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support%20this%20project-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Harrilee)
 
