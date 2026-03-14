@@ -195,7 +195,7 @@ class IDeviceClient {
         this.binaryPath,
         args,
         this._goIosExecOptions(timeout),
-        (error, stdout, stderr) => {
+        (error, stdout, _stderr) => {
           if (error) {
             console.error(
               `go-ios exec error (${args.join(' ')}): ${error.message}`,
@@ -227,26 +227,6 @@ class IDeviceClient {
   }
 
   async listDevices() {
-    const toDeviceEntry = item => {
-      if (typeof item === 'string') {
-        return {
-          Udid: item,
-          ConnectionType: 'USB',
-          DeviceName: 'iOS Device',
-          PairingStatus: 'unpaired',
-        }
-      }
-
-      const udid = item.Udid || item.udid || item.SerialNumber || ''
-      return {
-        ...item,
-        Udid: udid,
-        ConnectionType: item.ConnectionType || 'USB',
-        DeviceName: item.DeviceName || item.ProductType || 'iOS Device',
-        PairingStatus: item.PairingStatus || 'paired',
-      }
-    }
-
     try {
       const output = await this._exec(['list', '--details'])
       const data = JSON.parse(output)

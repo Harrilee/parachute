@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AMap from './pages/AMap.jsx'
 import OpenStreetMap from './pages/OpenStreetMap.jsx'
@@ -11,7 +11,7 @@ const darkTheme = createTheme({
         mode: 'light',
     },
 })
-import _ from './app.css'
+import './app.css'
 import { PHONE_CONNECTION_STATUS, LOCATION_SIMULATION_STATUS } from './utils.js'
 
 const root = createRoot(document.getElementById('root'))

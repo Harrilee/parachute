@@ -1,5 +1,4 @@
-import * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import AMapLoader from '@amap/amap-jsapi-loader'
 
 export default function Maps(props) {
