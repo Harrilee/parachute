@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { PHONE_CONNECTION_STATUS, LOCATION_SIMULATION_STATUS } from '../utils.js'
 
@@ -92,7 +92,7 @@ export default function ControlCenter(props) {
         setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.LOADING)
         window.electronAPI
             .mockLocation(latitude, longitude)
-            .then(res => {
+            .then(() => {
                 setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.COMPLETED)
                 handleSnackbarOpen('位置设置成功，断开连接/重启后自动恢复', 'success')
             })

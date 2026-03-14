@@ -9,6 +9,10 @@ module.exports = {
     packagerConfig: {
         asar: true,
         icon: path.join(__dirname, 'icon'),
+        extendInfo: {
+            NSLocationWhenInUseUsageDescription: 'Parachute needs your location to center the map on your current position.',
+            NSLocationUsageDescription: 'Parachute needs your location to center the map on your current position.',
+        },
         extraResource: [
             path.join(__dirname, 'bin', binaryName),
         ],

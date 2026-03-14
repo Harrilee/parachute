@@ -66,7 +66,10 @@ class IDeviceClient {
   _killOrphanedProcesses() {
     try {
       if (process.platform === 'darwin') {
-        const escapedPath = this.binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const escapedPath = this.binaryPath.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          '\\$&',
+        )
         execSync(
           `sudo -n /usr/bin/pkill -9 -f "${escapedPath} (tunnel start|setlocation)"`,
           { stdio: 'ignore' },
@@ -84,42 +87,70 @@ class IDeviceClient {
 
   _execAsAdmin(cmd, timeout = 15000) {
     return new Promise((resolve, reject) => {
-      const prompt = 'Parachute needs administrator access to communicate with your iOS device.'
+      const prompt =
+        'Parachute needs administrator access to communicate with your iOS device.'
       const script = `do shell script ${JSON.stringify(cmd)} with prompt ${JSON.stringify(prompt)} with administrator privileges`
 
       const appDir = path.join(app.getPath('userData'), 'admin-helper')
       const appPath = path.join(appDir, 'Parachute.app')
 
-      try { fs.rmSync(appPath, { recursive: true, force: true }) } catch (_) {}
+      try {
+        fs.rmSync(appPath, { recursive: true, force: true })
+      } catch (_) {}
       fs.mkdirSync(appDir, { recursive: true })
 
       const runWithOsascript = () => {
-        execFile('osascript', ['-e', script], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
-          if (error) {
-            if (error.killed) { resolve(''); return }
-            reject(error); return
-          }
-          resolve(stdout.trim())
-        })
+        execFile(
+          'osascript',
+          ['-e', script],
+          { timeout, killSignal: 'SIGKILL' },
+          (error, stdout) => {
+            if (error) {
+              if (error.killed) {
+                resolve('')
+                return
+              }
+              reject(error)
+              return
+            }
+            resolve(stdout.trim())
+          },
+        )
       }
 
-      execFile('osacompile', ['-o', appPath, '-e', script], { timeout: 10000 }, compileErr => {
-        if (compileErr) {
-          console.warn('osacompile failed, falling back to osascript')
-          runWithOsascript()
-          return
-        }
-
-        const applet = path.join(appPath, 'Contents', 'MacOS', 'applet')
-        execFile(applet, [], { timeout, killSignal: 'SIGKILL' }, (error, stdout) => {
-          try { fs.rmSync(appPath, { recursive: true, force: true }) } catch (_) {}
-          if (error) {
-            if (error.killed) { resolve(''); return }
-            reject(error); return
+      execFile(
+        'osacompile',
+        ['-o', appPath, '-e', script],
+        { timeout: 10000 },
+        compileErr => {
+          if (compileErr) {
+            console.warn('osacompile failed, falling back to osascript')
+            runWithOsascript()
+            return
           }
-          resolve((stdout || '').trim())
-        })
-      })
+
+          const applet = path.join(appPath, 'Contents', 'MacOS', 'applet')
+          execFile(
+            applet,
+            [],
+            { timeout, killSignal: 'SIGKILL' },
+            (error, stdout) => {
+              try {
+                fs.rmSync(appPath, { recursive: true, force: true })
+              } catch (_) {}
+              if (error) {
+                if (error.killed) {
+                  resolve('')
+                  return
+                }
+                reject(error)
+                return
+              }
+              resolve((stdout || '').trim())
+            },
+          )
+        },
+      )
     })
   }
 
@@ -174,7 +205,10 @@ class IDeviceClient {
   async _fetchDeviceName(udid) {
     try {
       const output = await this._exec(['devicename', `--udid=${udid}`])
-      const lastLine = output.split('\n').filter(l => l.includes('devicename')).pop()
+      const lastLine = output
+        .split('\n')
+        .filter(l => l.includes('devicename'))
+        .pop()
       if (lastLine) {
         const parsed = JSON.parse(lastLine)
         return parsed.devicename || null
@@ -186,36 +220,18 @@ class IDeviceClient {
   }
 
   async listDevices() {
-    const toDeviceEntry = item => {
-      if (typeof item === 'string') {
-        return {
-          Udid: item,
-          ConnectionType: 'USB',
-          DeviceName: 'iOS Device',
-          PairingStatus: 'unpaired',
-        }
-      }
-
-      const udid = item.Udid || item.udid || item.SerialNumber || ''
-      return {
-        ...item,
-        Udid: udid,
-        ConnectionType: item.ConnectionType || 'USB',
-        DeviceName: item.DeviceName || item.ProductType || 'iOS Device',
-        PairingStatus: item.PairingStatus || 'paired',
-      }
-    }
-
     try {
       const output = await this._exec(['list', '--details'])
       const data = JSON.parse(output)
       const devices = data.deviceList || (Array.isArray(data) ? data : [])
 
+      const usbOnly = devices.filter(d => d.ConnectionType === 'USB')
+
       const enriched = await Promise.all(
-        devices.map(async d => {
+        usbOnly.map(async d => {
           const udid = d.Udid || d.udid || ''
           if (udid && !this.deviceNameCache[udid]) {
-            const name = await this._fetchDeviceName(udid)
+            const name = d.DeviceName || await this._fetchDeviceName(udid)
             if (name) this.deviceNameCache[udid] = name
           }
           return {
@@ -230,15 +246,7 @@ class IDeviceClient {
       return JSON.stringify(enriched)
     } catch (error) {
       console.error(`listDevices error: ${error}`)
-      try {
-        const output = await this._exec(['list'])
-        const data = JSON.parse(output)
-        const devices = data.deviceList || (Array.isArray(data) ? data : [])
-        return JSON.stringify(devices.map(toDeviceEntry))
-      } catch (fallbackError) {
-        console.error(`listDevices fallback error: ${fallbackError}`)
-        return '[]'
-      }
+      return '[]'
     }
   }
 
@@ -254,10 +262,18 @@ class IDeviceClient {
       } catch (_) {}
 
       const lower = output.toLowerCase()
-      if (lower.includes('enabled: true') || lower.includes('devmode: true') || lower === 'true') {
+      if (
+        lower.includes('enabled: true') ||
+        lower.includes('devmode: true') ||
+        lower === 'true'
+      ) {
         return 'true'
       }
-      if (lower.includes('enabled: false') || lower.includes('devmode: false') || lower === 'false') {
+      if (
+        lower.includes('enabled: false') ||
+        lower.includes('devmode: false') ||
+        lower === 'false'
+      ) {
         return 'false'
       }
       return 'unknown'
@@ -282,7 +298,9 @@ class IDeviceClient {
       await this._exec(['devmode', 'reveal'], 15000)
       console.log('Developer mode toggle revealed in Settings')
     } catch (err) {
-      console.warn(`devmode reveal failed (may already be visible): ${err.message}`)
+      console.warn(
+        `devmode reveal failed (may already be visible): ${err.message}`,
+      )
     }
     try {
       const output = await this._exec(['devmode', 'enable'], 30000)
@@ -315,7 +333,9 @@ class IDeviceClient {
         .catch(async error => {
           const message = error?.message || ''
           if (message.includes('address already in use')) {
-            console.warn('Tunnel port already in use, cleaning up and retrying once')
+            console.warn(
+              'Tunnel port already in use, cleaning up and retrying once',
+            )
             this._killOrphanedProcesses()
             return this._startTunnelMacOS()
           }
@@ -338,7 +358,11 @@ class IDeviceClient {
 
     return new Promise((resolve, reject) => {
       console.log('Starting go-ios tunnel with sudo...')
-      this.tunnelProcess = spawn('sudo', ['-n', this.binaryPath, 'tunnel', 'start'], this._goIosSpawnOptions())
+      this.tunnelProcess = spawn(
+        'sudo',
+        ['-n', this.binaryPath, 'tunnel', 'start'],
+        this._goIosSpawnOptions(),
+      )
 
       let resolved = false
       const onOutput = data => {
@@ -394,7 +418,11 @@ class IDeviceClient {
   _startTunnelDirect() {
     return new Promise((resolve, reject) => {
       console.log('Starting go-ios tunnel...')
-      this.tunnelProcess = spawn(this.binaryPath, ['tunnel', 'start'], this._goIosSpawnOptions())
+      this.tunnelProcess = spawn(
+        this.binaryPath,
+        ['tunnel', 'start'],
+        this._goIosSpawnOptions(),
+      )
 
       let resolved = false
       const onOutput = data => {
@@ -446,8 +474,14 @@ class IDeviceClient {
   _killLocationProcesses(commandName) {
     try {
       if (process.platform === 'darwin') {
-        const escapedPath = this.binaryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        execSync(`sudo -n /usr/bin/pkill -9 -f "${escapedPath} ${commandName}"`, { stdio: 'ignore' })
+        const escapedPath = this.binaryPath.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          '\\$&',
+        )
+        execSync(
+          `sudo -n /usr/bin/pkill -9 -f "${escapedPath} ${commandName}"`,
+          { stdio: 'ignore' },
+        )
       } else {
         execSync(
           `ps aux | grep -E "ios ${commandName}" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null`,
@@ -477,7 +511,11 @@ class IDeviceClient {
       this._stopLocationProcess()
 
       const child = useSudo
-        ? spawn('sudo', ['-n', this.binaryPath, ...args], this._goIosSpawnOptions())
+        ? spawn(
+            'sudo',
+            ['-n', this.binaryPath, ...args],
+            this._goIosSpawnOptions(),
+          )
         : spawn(this.binaryPath, args, this._goIosSpawnOptions())
 
       this.locationProcess = child
@@ -537,7 +575,11 @@ class IDeviceClient {
 
   async mockLocation(latitude, longitude) {
     console.log(`Setting location: ${latitude}, ${longitude}`)
-    await this._startLocationSession(['setlocation', `--lat=${latitude}`, `--lon=${longitude}`])
+    await this._startLocationSession([
+      'setlocation',
+      `--lat=${latitude}`,
+      `--lon=${longitude}`,
+    ])
     return 'mocked'
   }
 
