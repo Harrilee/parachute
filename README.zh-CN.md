@@ -9,7 +9,7 @@
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/0a0b6d2b-7f96-4a1a-8e50-28ecd1fe8861" />
 
-Parachute 是一个 macOS 应用，可以帮助用户修改 iPhone 和 iPad 的虚拟定位，兼容最新的 iOS 26。
+Parachute 是一个 macOS 应用，可以帮助用户修改 iPhone 和 iPad 的虚拟定位，兼容最新的 iOS 27。
 
 ## 当前架构
 
