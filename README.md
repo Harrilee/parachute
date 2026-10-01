@@ -13,7 +13,7 @@ English | [简体中文](./README.zh-CN.md)
 
 
 
-Parachute is a macOS application that allows users to change the virtual location of their iPhone and iPad. It is compatible with latest iOS 26 version.
+Parachute is a macOS application that allows users to change the virtual location of their iPhone and iPad. It is compatible with latest iOS 27 version.
 
 ## Current Architecture
 
