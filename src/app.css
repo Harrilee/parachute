@@ -73,6 +73,7 @@ body {
 }
 
 .map-source-text {
+    text-align: center;
     display: flex;
     flex-direction: column;
     justify-content: center;
