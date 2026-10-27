@@ -7,7 +7,7 @@ const { BRIDGE_VERSION, NATIVE_VERSION, isNativeMigrationBridge, migrationFeedUR
 const environment = { platform: 'darwin', arch: 'arm64', systemVersion: '14.0' }
 const manifest = () => ({ currentRelease: NATIVE_VERSION, releases: [{ version: NATIVE_VERSION,
     updateTo: { version: NATIVE_VERSION,
-        url: 'https://github.com/Harrilee/parachute/releases/download/v0.4.0/Parachute-native-arm64-0.4.0.zip' } }] })
+        url: 'https://github.com/Harrilee/parachute/releases/download/v1.0.0/Parachute-native-arm64-1.0.0.zip' } }] })
 const response = (body, status = 200) => ({ status, ok: status >= 200 && status < 300,
     text: async () => typeof body === 'string' ? body : JSON.stringify(body) })
 const tick = () => new Promise(resolve => setImmediate(resolve))
@@ -68,12 +68,12 @@ test('missing, empty and placeholder feeds silently preserve the existing app', 
     }
 })
 
-test('only the architecture-specific first native0.4.0 release is eligible', () => {
+test('only the architecture-specific first native1.0.0 release is eligible', () => {
     assert.equal(hasNativeRelease(manifest(), 'arm64'), true)
     assert.equal(hasNativeRelease(manifest(), 'x64'), false)
-    for (const mutate of [m => { m.currentRelease = '0.4.1' },
+    for (const mutate of [m => { m.currentRelease = '1.0.1' },
         m => { m.releases[0].updateTo.url = 'http://example.com/app.zip' },
-        m => { m.releases[0].updateTo.version = '1.0.0' }]) {
+        m => { m.releases[0].updateTo.version = '1.0.1' }]) {
         const m = manifest(); mutate(m)
         assert.equal(hasNativeRelease(m, 'arm64'), false)
     }

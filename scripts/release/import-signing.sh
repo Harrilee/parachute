@@ -30,15 +30,6 @@ security unlock-keychain -p "$SIGNING_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 security import "$CERT_DIR/application.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -A >/dev/null
 security import "$CERT_DIR/installer.p12" -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -A >/dev/null
 security set-key-partition-list -S apple-tool:,apple: -k "$SIGNING_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
-public_key_hash() {
-    security find-certificate -c "$1" -p "$KEYCHAIN_PATH" | openssl x509 -pubkey -noout |
-        openssl pkey -pubin -outform DER | shasum -a 256 | awk '{print $1}'
-}
-if [ "$(public_key_hash 'Developer ID Application:')" = "$(public_key_hash 'Developer ID Installer:')" ]; then
-    echo 'Application and installer certificates share a public key: true'
-else
-    echo 'Application and installer certificates share a public key: false'
-fi
 security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 # The identity names are public certificate metadata. Require one identity of
 # each class for the expected team; never guess from a source-code constant.

@@ -40,9 +40,7 @@ jobs:
         run: |
           node -e "if(require('./package.json').version !== '0.3.9') process.exit(1)"
           npm test
-          python3 scripts/release/test-run-bounded.py
-          python3 scripts/release/test-stapler-retry.py
-          python3 scripts/release/test-component-package.py
+          python3 tests/release_tools_test.py
       - name: Preserve the published go-ios executable
         run: |
           curl --fail --location --retry 3 \
@@ -63,28 +61,24 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash scripts/release/import-signing.sh
-      - name: Create unsigned installer signing probe
-        run: bash scripts/release/probe-installer.sh create
-      - name: Verify installer key access
-        run: bash scripts/release/probe-installer.sh sign
       - name: Build and sign Electron app
         run: npm run make -- --arch="$ASSET_ARCH" --targets=@electron-forge/maker-zip
       - name: Notarize app and verify stapled ZIP
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash scripts/release/finish-bridge.sh out/make "$RUNNER_TEMP/bridge-artifacts" prepare
+        run: bash scripts/release/package.sh out/make "$RUNNER_TEMP/bridge-artifacts" prepare
       - name: Build and sign fixed-destination installer
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash scripts/release/finish-bridge.sh out/make "$RUNNER_TEMP/bridge-artifacts" build-pkg
+        run: bash scripts/release/package.sh out/make "$RUNNER_TEMP/bridge-artifacts" build-pkg
       - name: Notarize installer and verify installation
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CI_INSTALL_TEST: '1'
-        run: bash scripts/release/finish-bridge.sh out/make "$RUNNER_TEMP/bridge-artifacts" notarize-pkg
+        run: bash scripts/release/package.sh out/make "$RUNNER_TEMP/bridge-artifacts" notarize-pkg
       - name: Verify genuine 0.3.8 to 0.3.9 signed replacement
         run: |
-          python3 scripts/release/test-shipit.py \
+          python3 tests/shipit_test.py \
             --legacy "$RUNNER_TEMP/legacy.zip" \
             --report-directory "$RUNNER_TEMP/bridge-artifacts/migration-evidence" \
             "$RUNNER_TEMP/bridge-artifacts/Parachute-darwin-$ASSET_ARCH-0.3.9.zip"
@@ -94,16 +88,6 @@ jobs:
         with:
           name: electron-bridge-macos-${{ matrix.arch }}-0.3.9
           path: ${{ runner.temp }}/bridge-artifacts/*
-          if-no-files-found: warn
-          retention-days: 30
-      - name: Upload installer signing diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: installer-preflight-bridge-${{ matrix.arch }}
-          path: |
-            ${{ runner.temp }}/installer-preflight/*.log
-            ${{ runner.temp }}/installer-preflight/*.sample.txt
           if-no-files-found: warn
           retention-days: 30
       - name: Remove ephemeral signing keychain

@@ -1,5 +1,5 @@
 const BRIDGE_VERSION = '0.3.9'
-const NATIVE_VERSION = '0.4.0'
+const NATIVE_VERSION = '1.0.0'
 const FEED_ROOT = 'https://raw.githubusercontent.com/Harrilee/parachute/main/updates'
 
 function isNativeMigrationBridge({ isPackaged, platform, version }) {

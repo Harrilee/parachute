@@ -51,7 +51,7 @@ const openInterface = () => {
                     type: 'info',
                     buttons: chinese ? ['重新启动并更新', '稍后'] : ['Restart and update', 'Later'],
                     defaultId: 1, cancelId: 1,
-                    title: 'Parachute 0.4.0',
+                    title: 'Parachute 1.0.0',
                     message: chinese ? '原生 macOS 版本已准备就绪。' : 'The native macOS version is ready.',
                     detail: chinese ? '重新启动会结束当前的位置模拟会话。选择稍后将在下次退出时安装。' :
                         'Restarting ends the current location simulation session. Choosing Later installs the update the next time you quit.',
