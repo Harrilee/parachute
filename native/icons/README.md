@@ -60,3 +60,5 @@ Tools only). Rendered preview backgrounds are baked by the preview renderer; the
 runtime Clear material must be checked using the compiled catalog.
 
 Reference: [Apple's Icon Composer workflow](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer).
+
+The release CI compiles icons on macOS 26 with Xcode 26.2. On macOS 15, that compiler crashes in AssetCatalogAgent because its rendering frameworks lack the required CoreMedia symbols; a newer SDK alone is insufficient. This build-host requirement does not change the application deployment target or the ICNS fallback for older systems.

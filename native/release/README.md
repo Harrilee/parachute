@@ -10,7 +10,7 @@ The version is `1.0.0`; its initial native build number is `1000000`. Both apps
 retain the published Electron identity `com.electron.parachute`, use the existing
 Developer ID team, and require macOS 14.0 or newer. Build numbers must increase
 for each Sparkle update. The workflow selects Xcode 26.2 because the source uses
-the macOS 26 SDK with availability-guarded glass UI, and targets macOS 14.0.
+the macOS 26 SDK with availability-guarded glass UI, and targets macOS 14.0. Native jobs run on macOS 26: the Icon Composer compiler requires the newer host rendering frameworks. Bridge builds and signed migration component tests remain on macOS 15.
 
 ## Artifacts and routing
 
