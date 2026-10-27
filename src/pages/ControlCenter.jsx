@@ -217,9 +217,19 @@ export default function ControlCenter(props) {
                             : `已连接 ${deviceName}`
                         : '等待 USB 设备连接'}
                 </p>
-                <p className="info">经度: {longitude === '-' ? '-' : Math.round(longitude * 10e4) / 10e4}</p>
-                <p className="info">纬度: {latitude === '-' ? '-' : Math.round(latitude * 10e4) / 10e4}</p>
-                <button onClick={openCoordinateDialog}>手动输入经纬度</button>
+                <div className="coordinate-row">
+                    <span title={`经度: ${longitude}`}><span className="coordinate-label">经</span>{longitude === '-' ? '-' : Math.round(longitude * 10e4) / 10e4}</span>
+                    <span title={`纬度: ${latitude}`}><span className="coordinate-label">纬</span>{latitude === '-' ? '-' : Math.round(latitude * 10e4) / 10e4}</span>
+                    <button
+                        className="coordinate-edit" onClick={openCoordinateDialog}
+                        aria-label="编辑经纬度" title="编辑经纬度" type="button"
+                    >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="m16 3 5 5-12 12-6 1 1-6Z" />
+                            <path d="m14 5 5 5" />
+                        </svg>
+                    </button>
+                </div>
                 <button onClick={handleClick} disabled={buttonDisabled}>
                     {buttonText}
                 </button>
