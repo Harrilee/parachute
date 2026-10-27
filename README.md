@@ -62,7 +62,7 @@ open native/build/Parachute.app
 
 The local build uses a separate application identity with automatic updates disabled. The native helper retains the pinned [go-ios](https://github.com/Harrilee/go-ios) source and dependencies, adding a device acknowledgement for the success animation. It does not require `sudo`.
 
-This source tree contains the native macOS application. The [Electron 0.3.9 transition implementation](https://github.com/Harrilee/parachute/tree/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05) is retained at its merged source revision. Follow the [transition release procedure](https://github.com/Harrilee/parachute/blob/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05/docs/electron-transition.md); publish and verify 0.3.9 before native 1.0.0.
+This source tree contains the native macOS application. The [Electron 0.3.9 transition implementation](https://github.com/Harrilee/parachute/tree/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05) is retained at its merged source revision. Release validation checks migration from published 0.3.9 using pinned archive hashes; see the [native release procedure](native/release/README.md).
 
 ### Building locally
 
@@ -75,10 +75,16 @@ The local app is written to `native/build/Parachute.app`. Signed release builds 
 
 ### Releasing
 
-Prepare native 1.0.0 review artifacts with the manually dispatched workflow. Before the required 0.3.9 publication, use a successful transition CI run and exact commit for migration validation:
+Build signed native 1.0.0 artifacts after the published 0.3.9 bridge and its archive pins are available:
 
 ```bash
-gh workflow run release.yml --ref <release-branch> -f version=1.0.0 -f build_number=1000000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>
+gh workflow run release.yml --ref <release-ref> -f version=1.0.0 -f build_number=1000000
 ```
 
-The [GitHub Actions workflow](.github/workflows/release.yml) builds, signs and notarizes Apple Silicon and Intel apps and `.pkg` installers. It uploads CI artifacts for review; it does not publish a release or update feed. Follow the [release procedure](native/release/README.md) to publish reviewed artifacts and the signed Sparkle feeds. Existing Electron users migrate through a compatible bridge; older macOS systems retain the Electron version.
+After the build succeeds, the [native-only publisher](.github/workflows/publish.yml) can validate its artifacts or create a GitHub Release draft:
+
+```bash
+gh workflow run publish.yml --ref main -f action=draft -f source_run_id=<successful-native-run-id> -f source_commit=<40-character-commit> -f version=1.0.0
+```
+
+Use `action=validate` for a read-only check. After reviewing the draft and completing the [release checks](native/release/README.md), run the same publisher inputs with `action=publish`. Publication requires the source commit on `main` and migration evidence from the published 0.3.9 bridge. The publisher uploads existing signed artifacts without rebuilding them; updating the migration and Sparkle feeds remains a separate reviewed commit. Existing Electron users migrate through the bridge; systems below macOS 14 retain the Electron version.

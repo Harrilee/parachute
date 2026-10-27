@@ -96,8 +96,7 @@ Only the latest release is included in these initial feeds. A future release
 that raises hardware or macOS requirements must preserve compatible older
 items or explicitly plan retirement before replacing the production feed.
 The build number must increase for every published update, including a rollback
-build. Generating artifacts does not publish them: uploading release assets and
-updating `updates/appcast-*.xml` on `main` require the explicit release step.
+build. The native publisher attaches existing signed feeds to the GitHub Release without regenerating them. Updating `updates/appcast-*.xml` on `main` remains a separate reviewed commit; publishing the Release alone does not activate a feed.
 Never publish a feed before its referenced ZIP is available at its final URL. The first migration JSON feeds stay pinned to native 1.0.0; only the Sparkle feeds advance for subsequent native releases. See [the release procedure](../release/README.md) for the published 0.3.9 prerequisite and review gates.
 
 ## Verification boundaries

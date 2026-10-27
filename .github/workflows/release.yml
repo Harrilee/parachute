@@ -14,16 +14,6 @@ on:
         required: true
         default: '1000000'
         type: string
-      bridge_run_id:
-        description: Optional successful Electron 0.3.9 CI run for PR-only migration validation
-        required: false
-        default: ''
-        type: string
-      bridge_commit:
-        description: Exact approved source commit for bridge_run_id
-        required: false
-        default: ''
-        type: string
       bundle_id:
         description: Bundle identity verified from the published Electron app
         required: true
@@ -65,8 +55,6 @@ jobs:
       RELEASE_ARCH: ${{ matrix.arch }}
       ASSET_ARCH: ${{ matrix.asset_arch }}
       FEED_BASE_URL: ${{ inputs.feed_base_url }}
-      BRIDGE_RUN_ID: ${{ inputs.bridge_run_id }}
-      BRIDGE_COMMIT: ${{ inputs.bridge_commit }}
       RELEASE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
@@ -87,11 +75,6 @@ jobs:
           from urllib.parse import urlparse
           assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', os.environ['RELEASE_VERSION'])
           assert re.fullmatch(r'[1-9][0-9]*', os.environ['BUILD_NUMBER'])
-          run, commit = os.environ['BRIDGE_RUN_ID'], os.environ['BRIDGE_COMMIT']
-          assert bool(run) == bool(commit), 'Supply bridge_run_id and bridge_commit together'
-          if run:
-              assert re.fullmatch(r'[1-9][0-9]*', run)
-              assert re.fullmatch(r'[0-9a-f]{40}', commit)
           assert re.fullmatch(r'[A-Za-z0-9.-]+', os.environ['BUNDLE_ID'])
           assert os.environ['BUNDLE_ID'] == 'com.electron.parachute'
           url = urlparse(os.environ['FEED_BASE_URL'])
@@ -204,8 +187,6 @@ jobs:
     env:
       ASSET_ARCH: ${{ matrix.asset_arch }}
       RELEASE_VERSION: ${{ inputs.version }}
-      BRIDGE_RUN_ID: ${{ inputs.bridge_run_id }}
-      BRIDGE_COMMIT: ${{ inputs.bridge_commit }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -216,10 +197,9 @@ jobs:
         with:
           name: native-macos-${{ matrix.asset_arch }}-${{ inputs.version }}
           path: ${{ runner.temp }}/migration-inputs/native
-      - name: Verify and download the separately built Electron 0.3.9 bridge
+      - name: Verify and download the published Electron 0.3.9 bridge
         run: |
           python3 native/release/fetch-bridge-source.py --architecture "$ASSET_ARCH" \
-            --run-id "$BRIDGE_RUN_ID" --expected-commit "$BRIDGE_COMMIT" \
             --output "$RUNNER_TEMP/migration-inputs/bridge"
       - name: Exercise genuine Squirrel replacement on isolated signed copies
         run: |

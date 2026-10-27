@@ -1,0 +1,75 @@
+name: Publish reviewed native release
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/publish.yml
+      - native/release/publish.py
+      - native/Tests/PublicationTests.py
+      - native/updater/public-key.txt
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Validate artifacts, prepare a review draft, or explicitly publish that draft
+        required: true
+        type: choice
+        options: [validate, draft, publish]
+        default: draft
+      source_run_id:
+        description: Successful native release.yml build run
+        required: true
+        type: string
+      source_commit:
+        description: Exact 40-character commit tested by the source run
+        required: true
+        type: string
+      version:
+        description: Native version in the reviewed artifacts
+        required: true
+        type: string
+        default: '1.0.0'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: native-publication-${{ inputs.version || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test publication safeguards
+        run: python3 native/Tests/PublicationTests.py
+
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLICATION_ACTION: ${{ inputs.action }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate and promote the existing native artifacts
+        run: |
+          python3 native/release/publish.py --action "$PUBLICATION_ACTION" \
+            --source-run-id "$SOURCE_RUN_ID" --source-commit "$SOURCE_COMMIT" \
+            --version "$RELEASE_VERSION"

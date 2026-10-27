@@ -181,75 +181,121 @@ class ComponentPackageTests(unittest.TestCase):
 COMMIT = "a" * 40
 
 
-def valid_run():
-    return {"id": 123, "status": "completed", "conclusion": "success", "head_sha": COMMIT,
-            "path": bridge.WORKFLOW, "event": "workflow_dispatch",
-            "head_branch": "feat/harrli/electron-transition-0.3.9",
-            "repository": {"full_name": bridge.REPOSITORY}, "head_repository": {"full_name": bridge.REPOSITORY}}
-
-
 class BridgeSourceTests(unittest.TestCase):
-    def test_exact_successful_source_is_required(self):
-        bridge.validate_run(valid_run(), "123", COMMIT)
-        for field, value in [("status", "in_progress"), ("conclusion", "failure"),
-                             ("head_sha", "b" * 40), ("path", ".github/workflows/other.yml"),
-                             ("head_branch", "unreviewed"), ("event", "pull_request"),
-                             ("head_repository", {"full_name": "other/parachute"})]:
-            with self.subTest(field=field):
-                run = valid_run()
-                run[field] = value
-                with self.assertRaises(ValueError):
-                    bridge.validate_run(run, "123", COMMIT)
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary = tempfile.TemporaryDirectory(prefix="bridge-mach-o-tests-")
+        cls.addClassCleanup(cls.temporary.cleanup)
+        cls.binaries = {}
+        for architecture, machine in [("arm64", "arm64"), ("x64", "x86_64")]:
+            output = Path(cls.temporary.name) / architecture
+            subprocess.run(["xcrun", "clang", "-target", machine + "-apple-macos14.0", "-c",
+                            "-x", "c", "-", "-o", str(output)], input=b"int fixture(void) { return 0; }",
+                           check=True, capture_output=True, timeout=30)
+            cls.binaries[architecture] = output.read_bytes()
 
-    def test_invalid_run_and_commit_arguments_are_rejected(self):
-        for run_id, commit in [("123", "main"), ("../123", COMMIT), ("123", ""), ("0", COMMIT)]:
-            with self.subTest(run_id=run_id, commit=commit), self.assertRaises(ValueError):
-                bridge.validate_run(valid_run(), run_id, commit)
-
-    def fixture(self, root):
-        archive = root / "Parachute-darwin-arm64-0.3.9.zip"
+    def fixture(self, root, architecture="arm64", info=None, app_arch=None, helper_arch=None):
+        archive = root / f"Parachute-darwin-{architecture}-0.3.9.zip"
+        metadata = dict(CFBundleIdentifier="com.electron.parachute", CFBundleShortVersionString="0.3.9")
+        metadata.update(info or {})
         with zipfile.ZipFile(archive, "w") as output:
-            output.writestr("Parachute.app/Contents/Info.plist", plistlib.dumps({
-                "CFBundleIdentifier": "com.electron.parachute", "CFBundleShortVersionString": "0.3.9"}))
-        manifest = {"sourceCommit": COMMIT, "workflowRun": "123", "version": "0.3.9",
-                    "bundleID": "com.electron.parachute", "architecture": "arm64",
-                    "artifacts": {archive.name: {"bytes": archive.stat().st_size, "sha256": bridge.sha256(archive)}}}
-        return archive, manifest
+            output.writestr("Parachute.app/Contents/Info.plist", plistlib.dumps(metadata))
+            output.writestr("Parachute.app/Contents/MacOS/Parachute", self.binaries[app_arch or architecture])
+            output.writestr("Parachute.app/Contents/Resources/ios", self.binaries[helper_arch or architecture])
+        pins = {"version": "0.3.9", "sourceCommit": COMMIT,
+                "archives": {architecture: {"sha256": bridge.sha256(archive)}}}
+        pins_path = root / "pins.json"
+        pins_path.write_text(json.dumps(pins))
+        return archive, pins_path
 
-    def test_manifest_hash_commit_and_length_are_enforced(self):
-        with tempfile.TemporaryDirectory() as directory:
-            archive, manifest = self.fixture(Path(directory))
-            bridge.verify_ci_manifest(manifest, archive, "arm64", "123", COMMIT)
-            for key, value in [("sourceCommit", "b" * 40), ("version", "0.3.8"), ("architecture", "x64")]:
-                bad = dict(manifest, **{key: value})
-                with self.subTest(key=key), self.assertRaises(ValueError):
-                    bridge.verify_ci_manifest(bad, archive, "arm64", "123", COMMIT)
-            archive.write_bytes(archive.read_bytes() + b"tampered")
-            with self.assertRaises(ValueError):
-                bridge.verify_ci_manifest(manifest, archive, "arm64", "123", COMMIT)
-
-    def test_reviewed_ci_evidence_never_claims_release_eligibility(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            _, manifest = self.fixture(root)
-            (root / "bridge-arm64-manifest.json").write_text(json.dumps(manifest))
-            with patch.object(bridge, "api", return_value=valid_run()), \
-                    patch.object(bridge.subprocess, "run") as download, contextlib.redirect_stdout(io.StringIO()):
-                bridge.fetch("arm64", root, "123", COMMIT)
-            self.assertEqual(download.call_args.args[0][0:4], ["gh", "run", "download", "123"])
-            self.assertIs(json.loads((root / "bridge-source.json").read_text())["releaseEligible"], False)
-
-    def test_published_mode_requires_reviewed_pins_before_network(self):
+    def test_missing_or_invalid_pins_fail_before_network(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(bridge, "api") as request:
             root = Path(directory)
             with self.assertRaisesRegex(ValueError, "pins are not configured"):
-                bridge.fetch("arm64", root, pins_path=root / "missing.json")
+                bridge.fetch("arm64", root, root / "missing.json")
+            _, pins_path = self.fixture(root)
+            valid = json.loads(pins_path.read_text())
+            for key, value in [("version", "0.3.8"), ("sourceCommit", "main"),
+                               ("archives", {}), ("archives", {"arm64": {"sha256": "bad"}})]:
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    pins_path.write_text(json.dumps(dict(valid, **{key: value})))
+                    bridge.fetch("arm64", root, pins_path)
+            with self.assertRaisesRegex(ValueError, "Unsupported"):
+                bridge.fetch("other", root, pins_path)
             request.assert_not_called()
 
-    def test_partial_ci_source_selection_is_rejected(self):
+    def test_only_stable_release_at_pinned_commit_can_download(self):
+        stable = {"tag_name": "v0.3.9", "draft": False, "prerelease": False}
+        cases = [(dict(stable, **{key: value}), COMMIT) for key, value in
+                 [("draft", True), ("prerelease", True), ("tag_name", "v1.0.0"), ("draft", None)]]
+        cases.append((stable, "b" * 40))
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, "both"):
-                bridge.fetch("arm64", Path(directory), "123", "")
+            root = Path(directory)
+            _, pins = self.fixture(root)
+            for release, commit in cases:
+                with self.subTest(release=release, commit=commit), \
+                        patch.object(bridge, "api", side_effect=[release, {"object": {"type": "commit", "sha": commit}}]), \
+                        patch.object(bridge.subprocess, "run") as download, self.assertRaises(ValueError):
+                    bridge.fetch("arm64", root, pins)
+                download.assert_not_called()
+
+    def test_published_download_records_verified_release_eligibility(self):
+        real_run = subprocess.run
+        for architecture in ("arm64", "x64"):
+            with self.subTest(architecture=architecture), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                archive, pins = self.fixture(root, architecture)
+                downloads = []
+                def execute(arguments, **kwargs):
+                    if arguments[0] == "gh":
+                        downloads.append((arguments, kwargs))
+                        return subprocess.CompletedProcess(arguments, 0)
+                    return real_run(arguments, **kwargs)
+                with patch.object(bridge, "api", side_effect=[
+                        {"tag_name": "v0.3.9", "draft": False, "prerelease": False},
+                        {"object": {"type": "commit", "sha": COMMIT}}]), \
+                        patch.object(bridge.subprocess, "run", side_effect=execute), contextlib.redirect_stdout(io.StringIO()):
+                    bridge.fetch(architecture, root, pins)
+                self.assertEqual(downloads[0][0], ["gh", "release", "download", "v0.3.9", "--repo", bridge.REPOSITORY,
+                                                   "--pattern", archive.name, "--dir", str(root)])
+                self.assertEqual(downloads[0][1]["timeout"], 300)
+                self.assertEqual(len(downloads), 1)
+                self.assertEqual(json.loads((root / "bridge-source.json").read_text()), {
+                    "source": "published-release", "releaseEligible": True, "tag": "v0.3.9",
+                    "sourceCommit": COMMIT, "architecture": architecture, "archive": archive.name,
+                    "sha256": bridge.sha256(archive)})
+
+    def test_archive_hash_identity_version_and_both_architectures_are_enforced(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive, _ = self.fixture(root)
+            expected = bridge.sha256(archive)
+            archive.write_bytes(archive.read_bytes() + b"tampered")
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                bridge.verify_archive(archive, expected, "arm64")
+            for change, error in [({"info": {"CFBundleIdentifier": "other.app"}}, ValueError),
+                                  ({"info": {"CFBundleShortVersionString": "0.3.8"}}, ValueError),
+                                  ({"app_arch": "x64"}, subprocess.CalledProcessError),
+                                  ({"helper_arch": "x64"}, subprocess.CalledProcessError)]:
+                with self.subTest(change=change), self.assertRaises(error):
+                    archive, _ = self.fixture(root, **change)
+                    bridge.verify_archive(archive, bridge.sha256(archive), "arm64")
+
+    def test_annotated_release_tag_resolves_to_the_pinned_commit(self):
+        with patch.object(bridge, "api", side_effect=[
+                {"object": {"type": "tag", "sha": "c" * 40}},
+                {"object": {"type": "commit", "sha": COMMIT}}]) as request:
+            self.assertEqual(bridge.release_commit(), COMMIT)
+        self.assertEqual([call.args[0] for call in request.call_args_list],
+                         ["git/ref/tags/v0.3.9", "git/tags/" + "c" * 40])
+
+    def test_invalid_or_cyclic_release_tag_is_bounded_and_rejected(self):
+        for reference, expected_calls in [({"type": "tree", "sha": COMMIT}, 1),
+                                           ({"type": "tag", "sha": COMMIT}, 6)]:
+            with self.subTest(reference=reference), patch.object(bridge, "api", return_value={"object": reference}) as request:
+                with self.assertRaisesRegex(ValueError, "does not resolve"):
+                    bridge.release_commit()
+                self.assertEqual(request.call_count, expected_calls)
 
 
 if __name__ == "__main__":

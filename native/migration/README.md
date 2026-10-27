@@ -78,7 +78,7 @@ Sign the complete `Squirrel.framework` with the same Developer ID identity befor
 
 ## Obtain the 0.3.9 bridge
 
-Use the [bridge-source modes](../release/README.md#bridge-source-for-ci) in the native workflow. Before publication, an exact approved CI run/commit supports component testing with `releaseEligible=false`. Release preparation requires published 0.3.9 and reviewed archive/tag pins. This native tree never rebuilds Electron; its standalone AppKit helper implements only the relaunch contract.
+The native workflow uses only the [published 0.3.9 bridge and reviewed archive/tag pins](../release/README.md#bridge-source-for-ci). It never accepts a bridge from a CI-artifact override or rebuilds Electron. The small standalone AppKit helper remains necessary in the first native payload because the old updater invokes that exact path after replacement; it implements only this relaunch contract.
 
 ## Isolated component tests
 
