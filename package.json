@@ -1,7 +1,7 @@
 {
   "name": "parachute",
   "productName": "Parachute",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "My Electron application description",
   "repository": {
     "type": "git",
@@ -16,7 +16,8 @@
     "publish": "electron-forge publish",
     "lint": "eslint src/ && stylelint 'src/**/*.css' && htmlhint src/*.html",
     "lint:fix": "eslint src/ --fix && stylelint 'src/**/*.css' --fix",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "node --test tests/native-migration.test.cjs"
   },
   "devDependencies": {
     "@babel/core": "^7.25.7",

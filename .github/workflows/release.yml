@@ -1,130 +1,97 @@
-name: Build & Release macOS
+name: Prepare Electron 0.3.9 migration artifacts
 
+# Review artifacts only; publication remains an explicit maintainer action.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: electron-transition-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build:
-    runs-on: macos-latest
+  bridge:
+    name: Electron 0.3.9 ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     strategy:
+      fail-fast: false
       matrix:
-        arch: [arm64, x64]
-    permissions:
-      contents: write
+        include:
+          - arch: arm64
+            runner: macos-26
+          - arch: x64
+            runner: macos-26-intel
+    env:
+      ASSET_ARCH: ${{ matrix.arch }}
+      HUSKY: '0'
     steps:
       - uses: actions/checkout@v4
-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Cross-compile go-ios for target arch
+          node-version: '20'
+          cache: npm
+      - name: Validate version and migration behavior
         run: |
-          case "${{ matrix.arch }}" in
-            arm64) GOARCH="arm64" ;;
-            x64)   GOARCH="amd64" ;;
-          esac
-          FORCE_REBUILD=1 GOOS=darwin GOARCH="$GOARCH" CGO_ENABLED=0 \
-            bash scripts/download-go-ios.sh
-
-      - name: Import signing certificates
+          node -e "if(require('./package.json').version !== '0.3.9') process.exit(1)"
+          npm test
+          python3 tests/release_tools_test.py
+      - name: Preserve the published go-ios executable
+        run: |
+          curl --fail --location --retry 3 \
+            "https://github.com/Harrilee/parachute/releases/download/v0.3.8/Parachute-darwin-$ASSET_ARCH-0.3.8.zip" \
+            -o "$RUNNER_TEMP/legacy.zip"
+          LEGACY_APP_ARCHIVE="$RUNNER_TEMP/legacy.zip" \
+            bash scripts/release/provision-legacy-ios.sh "$GITHUB_WORKSPACE" "$ASSET_ARCH"
+          npm ci
+      - name: Lint Electron sources
+        run: npm run lint
+      - name: Import existing Apple signing and notarization credentials
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
           APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
-        run: |
-          APPLICATION_CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          INSTALLER_CERTIFICATE_PATH=$RUNNER_TEMP/installer_certificate.p12
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-
-          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $APPLICATION_CERTIFICATE_PATH
-          echo -n "$APPLE_INSTALLER_CERTIFICATE" | base64 --decode -o $INSTALLER_CERTIFICATE_PATH
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          security import $APPLICATION_CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security import $INSTALLER_CERTIFICATE_PATH -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security set-key-partition-list -S apple-tool:,apple: \
-            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychains -d user -s $KEYCHAIN_PATH login.keychain
-
-      - name: Build macOS app
-        env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          KEYCHAIN_PATH: ${{ runner.temp }}/app-signing.keychain-db
-        run: npm run make -- --arch=${{ matrix.arch }}
-
-      - name: Notarize and staple pkg
+        run: bash scripts/release/import-signing.sh
+      - name: Build and sign Electron app
+        run: npm run make -- --arch="$ASSET_ARCH" --targets=@electron-forge/maker-zip
+      - name: Notarize app and verify stapled ZIP
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/release/package.sh out/make "$RUNNER_TEMP/bridge-artifacts" prepare
+      - name: Build and sign fixed-destination installer
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/release/package.sh out/make "$RUNNER_TEMP/bridge-artifacts" build-pkg
+      - name: Notarize installer and verify installation
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CI_INSTALL_TEST: '1'
+        run: bash scripts/release/package.sh out/make "$RUNNER_TEMP/bridge-artifacts" notarize-pkg
+      - name: Verify genuine 0.3.8 to 0.3.9 signed replacement
         run: |
-          PKG_COUNT=$(find out/make -name '*.pkg' -type f | wc -l | tr -d ' ')
-          if [ "$PKG_COUNT" = "0" ]; then
-            echo "No pkg files found to notarize"
-            exit 1
-          fi
-
-          find out/make -name '*.pkg' -type f -print0 | while IFS= read -r -d '' pkg; do
-            echo "Notarizing $pkg"
-            xcrun notarytool submit "$pkg" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --wait
-
-            echo "Stapling $pkg"
-            xcrun stapler staple "$pkg"
-          done
-
-      - name: Cleanup keychain
+          python3 tests/shipit_test.py \
+            --legacy "$RUNNER_TEMP/legacy.zip" \
+            --report-directory "$RUNNER_TEMP/bridge-artifacts/migration-evidence" \
+            "$RUNNER_TEMP/bridge-artifacts/Parachute-darwin-$ASSET_ARCH-0.3.9.zip"
+      - name: Upload artifacts, manifests and verification evidence
         if: always()
-        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
-
-      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: parachute-macos-${{ matrix.arch }}
-          path: |
-            out/make/**/*.zip
-            out/make/**/*.pkg
-
-  publish-release:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: parachute-macos-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release-assets/**/*.zip
-            release-assets/**/*.pkg
+          name: electron-bridge-macos-${{ matrix.arch }}-0.3.9
+          path: ${{ runner.temp }}/bridge-artifacts/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove ephemeral signing keychain
+        if: always()
+        run: |
+          KEYCHAIN_FILE="$RUNNER_TEMP/parachute-transition-signing.keychain-db"
+          if [ -f "$KEYCHAIN_FILE" ]; then security delete-keychain "$KEYCHAIN_FILE"; fi

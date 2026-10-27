@@ -9,24 +9,18 @@ module.exports = {
     packagerConfig: {
         asar: true,
         icon: path.join(__dirname, 'icon'),
-        extendInfo: {
-            NSLocationWhenInUseUsageDescription: 'Parachute needs your location to center the map on your current position.',
-            NSLocationUsageDescription: 'Parachute needs your location to center the map on your current position.',
-        },
         extraResource: [
             path.join(__dirname, 'bin', binaryName),
         ],
         osxSign: {
+            identity: process.env.APPLE_SIGN_ID,
+            keychain: process.env.KEYCHAIN_PATH,
             optionsForFile: () => ({
                 entitlements: path.join(__dirname, 'entitlements.plist'),
                 entitlementsInherit: path.join(__dirname, 'entitlements.child.plist'),
             }),
         },
-        osxNotarize: {
-            appleId: process.env.APPLE_ID,
-            appleIdPassword: process.env.APPLE_PASSWORD,
-            teamId: process.env.APPLE_TEAM_ID,
-        },
+        // Shared release tooling notarizes and retries ticket stapling.
     },
     rebuildConfig: {},
     makers: [
