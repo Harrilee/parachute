@@ -107,14 +107,16 @@ const App = () => {
             <ThemeProvider theme={darkTheme}>
                 <CssBaseline />
                 {map === '高德地图' && (
-                    <AMap setLongitude={setLongitude} setLatitude={setLatitude} setMapLoaded={setMapLoaded} />
+                    <AMap longitude={longitude} latitude={latitude} setLongitude={setLongitude} setLatitude={setLatitude} setMapLoaded={setMapLoaded} />
                 )}
                 {map === 'Open Street Map' && (
-                    <OpenStreetMap setLongitude={setLongitude} setLatitude={setLatitude} setMapLoaded={setMapLoaded} />
+                    <OpenStreetMap longitude={longitude} latitude={latitude} setLongitude={setLongitude} setLatitude={setLatitude} setMapLoaded={setMapLoaded} />
                 )}
                 {mapLoaded && (
                     <>
                         <ControlCenter
+                            setLongitude={setLongitude}
+                            setLatitude={setLatitude}
                             longitude={longitude}
                             latitude={latitude}
                             phoneConnectionStatus={phoneConnectionStatus}

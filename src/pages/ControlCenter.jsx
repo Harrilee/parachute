@@ -6,6 +6,9 @@ import Dialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import DialogActions from '@mui/material/DialogActions'
+import TextField from '@mui/material/TextField'
+import Button from '@mui/material/Button'
 
 import Snackbar from '@mui/material/Snackbar'
 import Alert from '@mui/material/Alert'
@@ -15,6 +18,8 @@ import enableDevMode from '../images/enable-devmode.png'
 
 export default function ControlCenter(props) {
     const {
+        setLongitude,
+        setLatitude,
         longitude,
         latitude,
         phoneConnectionStatus,
@@ -24,6 +29,33 @@ export default function ControlCenter(props) {
     } = props
 
     const [deviceName, setDeviceName] = useState()
+
+    const [coordinateDialogOpen, setCoordinateDialogOpen] = useState(false)
+    const [longitudeInput, setLongitudeInput] = useState('')
+    const [latitudeInput, setLatitudeInput] = useState('')
+    const [coordinateError, setCoordinateError] = useState('')
+
+    function openCoordinateDialog() {
+        setLongitudeInput(longitude === '-' ? '' : String(longitude))
+        setLatitudeInput(latitude === '-' ? '' : String(latitude))
+        setCoordinateError('')
+        setCoordinateDialogOpen(true)
+    }
+
+    function applyCoordinates(event) {
+        event.preventDefault()
+        const lng = Number(longitudeInput)
+        const lat = Number(latitudeInput)
+        if (!longitudeInput.trim() || !latitudeInput.trim() ||
+            !Number.isFinite(lng) || !Number.isFinite(lat) ||
+            lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+            setCoordinateError('请输入有效坐标：经度 -180～180，纬度 -90～90。')
+            return
+        }
+        setLongitude(lng)
+        setLatitude(lat)
+        setCoordinateDialogOpen(false)
+    }
 
     // dialog
     const [openConnectionTips, setOpenConnectionTips] = useState(false)
@@ -86,7 +118,7 @@ export default function ControlCenter(props) {
     function mockLocation() {
         console.log(latitude, longitude)
         if (latitude === '-' || longitude === '-') {
-            handleSnackbarOpen('请先在地图上选择一个位置', 'error')
+            handleSnackbarOpen('请先在地图上选择位置或手动输入经纬度', 'error')
             return
         }
         setLocationSimulationStatus(LOCATION_SIMULATION_STATUS.LOADING)
@@ -187,10 +219,36 @@ export default function ControlCenter(props) {
                 </p>
                 <p className="info">经度: {longitude === '-' ? '-' : Math.round(longitude * 10e4) / 10e4}</p>
                 <p className="info">纬度: {latitude === '-' ? '-' : Math.round(latitude * 10e4) / 10e4}</p>
+                <button onClick={openCoordinateDialog}>手动输入经纬度</button>
                 <button onClick={handleClick} disabled={buttonDisabled}>
                     {buttonText}
                 </button>
             </div>
+            <Dialog open={coordinateDialogOpen} onClose={() => setCoordinateDialogOpen(false)} fullWidth maxWidth="xs">
+                <form onSubmit={applyCoordinates} noValidate>
+                    <DialogTitle>手动输入经纬度</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>输入十进制度坐标，确认后可点击“模拟位置”或“更新位置”。</DialogContentText>
+                        <TextField
+                            autoFocus fullWidth margin="normal" label="经度" type="number"
+                            value={longitudeInput} onChange={event => setLongitudeInput(event.target.value)}
+                            inputProps={{ min: -180, max: 180, step: 'any' }}
+                            helperText="-180～180，东经为正，西经为负"
+                        />
+                        <TextField
+                            fullWidth margin="normal" label="纬度" type="number"
+                            value={latitudeInput} onChange={event => setLatitudeInput(event.target.value)}
+                            inputProps={{ min: -90, max: 90, step: 'any' }}
+                            helperText="-90～90，北纬为正，南纬为负"
+                        />
+                        {coordinateError && <Alert severity="error">{coordinateError}</Alert>}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setCoordinateDialogOpen(false)}>取消</Button>
+                        <Button type="submit">确认位置</Button>
+                    </DialogActions>
+                </form>
+            </Dialog>
             <Dialog open={openConnectionTips} onClose={handleCloseConnectionTips}>
                 <DialogTitle id="alert-dialog-title">设备连接指南</DialogTitle>
                 <DialogContent>
