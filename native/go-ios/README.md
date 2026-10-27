@@ -2,7 +2,7 @@
 
 The existing go-ios CLI waits indefinitely after a successful `StartSimulateLocation` DTX reply without printing a success message. A still-running process is not proof that the request succeeded. The native map's success animation therefore needs an explicit acknowledgement.
 
-`location-ack.patch` adds one structured `event=location-simulation-started` log entry immediately after that call returns without error. The event contains no coordinates or device identifier. No device protocols, dependency versions, tunnel behavior, or go-ios version are upgraded for native Parachute 0.4.0.
+`location-ack.patch` adds one structured `event=location-simulation-started` log entry immediately after that call returns without error. The event contains no coordinates or device identifier. No device protocols, dependency versions, tunnel behavior, or go-ios version are upgraded for native Parachute 1.0.0.
 
 The source is pinned to `Harrilee/go-ios` commit `80ed9e1cb2c9dfd8af38efff54e0feaad6fe742b`, the inspected `v1.0.204` ref, and requires Go 1.24.4. The previously inspected local Electron `bin/ios` reported `local-build` with no embedded source revision. This pinned source commit is therefore not independently verified provenance for that old binary. Its SHA-256 (`0d5d80df01f77b9c0532d6e95530ed07f7915159b0d363089038798ce8c80798`) and 26 embedded module records remain the comparison baseline; the records are checked in at `native/release/go-ios-dependencies.txt`.
 

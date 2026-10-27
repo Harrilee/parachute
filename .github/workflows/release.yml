@@ -8,12 +8,12 @@ on:
       version:
         description: Native marketing version
         required: true
-        default: '0.4.0'
+        default: '1.0.0'
         type: string
       build_number:
         description: Monotonically increasing native build number
         required: true
-        default: '400000'
+        default: '1000000'
         type: string
 
       bridge_run_id:

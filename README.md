@@ -12,7 +12,7 @@ English | [简体中文](./README.zh-CN.md)
 
 
 
-Parachute is a native macOS application for changing the virtual location of an iPhone or iPad. Version 0.4.0 uses SwiftUI and Apple Maps, with English and Chinese interfaces and automatic light and dark appearance. Requires macOS 14 or later.
+Parachute is a native macOS application for changing the virtual location of an iPhone or iPad. Version 1.0.0 uses SwiftUI and Apple Maps, with English and Chinese interfaces and automatic light and dark appearance. Requires macOS 14 or later.
 
 ## Current Architecture
 
@@ -75,10 +75,10 @@ The local app is written to `native/build/Parachute.app`. Signed release builds 
 
 ### Releasing
 
-Publish the Electron 0.3.9 transition release first. Prepare native 0.4.0 artifacts with the manually dispatched workflow; use the successful transition CI run ID for prepublication migration validation:
+Publish the Electron 0.3.9 transition release first. Prepare native 1.0.0 artifacts with the manually dispatched workflow; use the successful transition CI run ID for prepublication migration validation:
 
 ```bash
-gh workflow run release.yml --ref <release-branch> -f version=0.4.0 -f build_number=400000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>
+gh workflow run release.yml --ref <release-branch> -f version=1.0.0 -f build_number=1000000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>
 ```
 
 The [GitHub Actions workflow](.github/workflows/release.yml) builds, signs and notarizes Apple Silicon and Intel apps and `.pkg` installers. It uploads CI artifacts for review; it does not publish a release or update feed. Follow the [release procedure](native/release/README.md) to publish reviewed artifacts and the signed Sparkle feeds. Existing Electron users migrate through a compatible bridge; older macOS systems retain the Electron version.

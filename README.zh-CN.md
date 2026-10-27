@@ -9,7 +9,7 @@
 
 <img width="4507" height="2840" alt="MacBook Pro M5 16-inch Space Black" src="https://github.com/user-attachments/assets/1f3ea330-1c92-49c5-84b2-ae97c8e8e762" />
 
-Parachute 是一款原生 macOS 应用，可以修改 iPhone 和 iPad 的虚拟定位。0.4.0 版本采用 SwiftUI 和 Apple 地图，支持中英文界面，并跟随系统切换浅色与深色外观。需要 macOS 14 或更高版本。
+Parachute 是一款原生 macOS 应用，可以修改 iPhone 和 iPad 的虚拟定位。1.0.0 版本采用 SwiftUI 和 Apple 地图，支持中英文界面，并跟随系统切换浅色与深色外观。需要 macOS 14 或更高版本。
 
 ## 当前架构
 
@@ -72,10 +72,10 @@ NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
 
 ### 发布
 
-先发布 Electron 0.3.9 过渡版，再准备原生 0.4.0。发布前可用过渡版成功的 CI run ID 验证迁移：
+先发布 Electron 0.3.9 过渡版，再准备原生 1.0.0。发布前可用过渡版成功的 CI run ID 验证迁移：
 
 ```bash
-gh workflow run release.yml --ref <release-branch> -f version=0.4.0 -f build_number=400000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>
+gh workflow run release.yml --ref <release-branch> -f version=1.0.0 -f build_number=1000000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>
 ```
 
 [GitHub Actions workflow](.github/workflows/release.yml) 会为 Apple Silicon 和 Intel 构建应用及 `.pkg` 安装包，完成签名和公证后上传 CI artifacts 供审查，不会自动发布 release 或更新源。按[发布说明](native/release/README.md)发布审查后的产物及签名的 Sparkle 更新索引。现有 Electron 用户通过兼容过渡版本升级；较旧的 macOS 系统保留 Electron 版本。

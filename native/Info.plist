@@ -6,8 +6,8 @@
 <key>CFBundleIdentifier</key><string>li.haorui.Parachute.NativePrototype</string>
 <key>CFBundleExecutable</key><string>Parachute</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.4.0</string>
-<key>CFBundleVersion</key><string>400000</string>
+<key>CFBundleShortVersionString</key><string>1.0.0</string>
+<key>CFBundleVersion</key><string>1000000</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>

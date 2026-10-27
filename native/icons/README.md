@@ -54,7 +54,7 @@ to shipping the layered catalog.
 Historical validation: all six appearances rendered successfully with Apple's signed Icon
 Composer 1.2 `ictool`; the missing-compiler release failure and local fallback
 paths were exercised. CI run [`40463878417`](https://github.com/Harrilee/parachute/actions/runs/40463878417)
-(commit `ac65c3d`) compiled and validated the icon successfully on **both Apple Silicon and Intel**, using macOS 26 hosts and Xcode 26.2. These were artifacts of the superseded, prepared 1.0.0 candidate, not a published version. They do not establish that the current 0.4.0 CI or its final packages have passed; repeat the catalog/fallback checks on the exact new artifacts.
+(commit `ac65c3d`) compiled and validated the icon successfully on **both Apple Silicon and Intel**, using macOS 26 hosts and Xcode 26.2. These were artifacts of an earlier source revision and release design that also used version 1.0.0. That prepared candidate was superseded and never published. They do not establish that the current 1.0.0 CI or its final packages have passed; repeat the catalog/fallback checks on the exact new artifacts.
 
 The downloaded CI evidence and both final signed application ZIPs were inspected.
 Their `Assets.car` files contain `NSAppearanceNameAqua`,

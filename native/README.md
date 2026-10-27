@@ -1,6 +1,6 @@
 # Native macOS application
 
-Parachute 0.4.0 uses SwiftUI, Apple MapKit and Sparkle 2. This branch contains the native macOS application; Electron source and build tooling are removed. A separate PR and published Electron 0.3.9 release provide the compatibility bridge before 0.4.0 can ship. The release workflow prepares signed artifacts for review; publication remains explicit.
+Parachute 1.0.0 uses SwiftUI, Apple MapKit and Sparkle 2. This branch contains the native macOS application; Electron source and build tooling are removed. A separate PR and published Electron 0.3.9 release provide the compatibility bridge before 1.0.0 can ship. The release workflow prepares signed artifacts for review; publication remains explicit.
 
 ## Build and run
 
@@ -65,6 +65,8 @@ Historical helper inspection and retained native source baseline:
 
 `native/test.sh` runs coordinate edge cases, fake-executable device service/tunnel/acknowledgement checks, MapKit search cancellation and stale-result tests, and native language/resource selection in a temporary bundle. Language tests also verify the bundle declares no location permission keys. It does not send device-changing commands or modify system language preferences.
 
+`python3 native/Tests/ReleaseToolsTests.py` separately checks packaging-process cleanup, bounded ticket retries, fixed-destination package metadata and bridge-source provenance. It exercises `native/release/process.py` and the component packaging entry point in `native/release/package.sh` using local fixtures, without installing a package or contacting Apple notarization. The release guide describes actual signing, notarization and installation checks.
+
 Live Apple MapKit queries verified both an `Apple Park` completion and a single result for `1 Apple Park Way, Cupertino, CA`. Successful-command acknowledgement handling is tested with fake executables; the instrumented binary has not been used to set a real phone's location during automated validation.
 
 Search keeps IME marked text inside the native editor until candidate confirmation. Unrelated SwiftUI refreshes cannot overwrite a composition, and confirming a candidate does not also submit a search. Old results and deferred focus changes are rejected while a new composition is in progress.
@@ -89,4 +91,4 @@ An isolated map-only harness measured the previous `.onTapGesture` delay at appr
 - True on-device location simulation and disconnect/reconnect validation, including network-only tunnel setup and simulation.
 - See [release validation](release/README.md), [migration validation](migration/README.md), and [Sparkle validation](updater/README.md) for the exact signing, install and update checks and their remaining limits.
 
-Local preview builds never initialize Sparkle. Production builds retain `com.electron.parachute`, use architecture-specific HTTPS feeds and signed updates, and include a small new AppKit relaunch helper required by the old updater. That helper has no Electron dependency. The initial native version is 0.4.0 with build number 400000. Historical 1.0.0 candidate results describe superseded preparation work, not a published release or verification of the current 0.4.0 artifacts. Do not route production users to 0.4.0 until published 0.3.9 and the explicit migration/release checks are in place.
+Local preview builds never initialize Sparkle. Production builds retain `com.electron.parachute`, use architecture-specific HTTPS feeds and signed updates, and include a small new AppKit relaunch helper required by the old updater. That helper has no Electron dependency. The initial native version is 1.0.0 with build number 1000000. Historical candidate results also used the 1.0.0 version number, but came from an earlier source revision and release design. They are superseded preparation evidence, not a published release or verification of the current 1.0.0 artifacts. Do not route production users to 1.0.0 until published 0.3.9 and the explicit migration/release checks are in place.

@@ -28,7 +28,7 @@ cat > "$FRAMEWORK/Versions/A/Resources/Info.plist" <<'PLIST'
 <key>CFBundleExecutable</key><string>Squirrel</string>
 <key>CFBundlePackageType</key><string>FMWK</string>
 <key>CFBundleVersion</key><string>1</string>
-<key>CFBundleShortVersionString</key><string>0.4.0</string>
+<key>CFBundleShortVersionString</key><string>1.0.0</string>
 </dict></plist>
 PLIST
 ln -s A "$FRAMEWORK/Versions/Current"

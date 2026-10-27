@@ -5,7 +5,7 @@ URL and SHA-256 are recorded in `sparkle-version.json`; `fetch-sparkle.sh` verif
 the archive, framework signature, and both CPU architectures. Downloaded tools
 and frameworks stay in ignored `native/build/cache/`.
 
-Native 0.4.0 (build 400000) follows the separately reviewed and published Electron 0.3.9 bridge release. Sparkle handles updates after the first native installation; it does not replace the bridge or its migration checks. This branch contains no Electron build pipeline.
+Native 1.0.0 (build 1000000) follows the separately reviewed and published Electron 0.3.9 bridge release. Sparkle handles updates after the first native installation; it does not replace the bridge or its migration checks. This branch contains no Electron build pipeline.
 
 ## Application integration
 
@@ -69,8 +69,8 @@ to preserve framework symlinks. Native ZIP names deliberately do not match the
 old Electron update service's macOS pattern:
 
 ```text
-Parachute-native-arm64-0.4.0.zip
-Parachute-native-x64-0.4.0.zip
+Parachute-native-arm64-1.0.0.zip
+Parachute-native-x64-1.0.0.zip
 ```
 
 Generate each feed separately. In CI, pass the existing Secret through stdin;
@@ -78,9 +78,9 @@ do not enable shell tracing:
 
 ```sh
 printf '%s' "$SPARKLE_PRIVATE_KEY" | native/updater/generate-appcast.py \
-  --archive dist/Parachute-native-arm64-0.4.0.zip \
-  --architecture arm64 --version 0.4.0 --build 400000 \
-  --download-base-url https://github.com/Harrilee/parachute/releases/download/v0.4.0/ \
+  --archive dist/Parachute-native-arm64-1.0.0.zip \
+  --architecture arm64 --version 1.0.0 --build 1000000 \
+  --download-base-url https://github.com/Harrilee/parachute/releases/download/v1.0.0/ \
   --output dist/appcast-arm64.xml
 ```
 
@@ -98,7 +98,7 @@ items or explicitly plan retirement before replacing the production feed.
 The build number must increase for every published update, including a rollback
 build. Generating artifacts does not publish them: uploading release assets and
 updating `updates/appcast-*.xml` on `main` require the explicit release step.
-Never publish a feed before its referenced ZIP is available at its final URL. The first migration JSON feeds stay pinned to native 0.4.0; only the Sparkle feeds advance for subsequent native releases. See [the release procedure](../release/README.md) for the published 0.3.9 prerequisite and review gates.
+Never publish a feed before its referenced ZIP is available at its final URL. The first migration JSON feeds stay pinned to native 1.0.0; only the Sparkle feeds advance for subsequent native releases. See [the release procedure](../release/README.md) for the published 0.3.9 prerequisite and review gates.
 
 ## Verification boundaries
 
@@ -131,7 +131,7 @@ for each architecture provide separate evidence and must not be inferred from
 this local result. The service's production HTTPS configuration and preview
 isolation are covered independently by `UpdaterConfigurationTests.swift`.
 
-Historical signed-package and fixture results from the superseded 1.0.0 candidate are preparation evidence only; that candidate was not a production release. They do not establish that the current 0.4.0 packages or a signed 0.4.0-to-higher-build update have passed. Record results for the exact new artifact hashes before publication.
+Historical signed-package and fixture results came from an earlier source revision and release design that also used version 1.0.0. Those superseded candidate results are preparation evidence only; that candidate was not a production release. They do not establish that the current 1.0.0 packages or a signed 1.0.0-to-higher-build update have passed. Record results for the exact new artifact hashes before publication.
 
 Electron-to-native migration remains a separate, still-unverified complete end-to-end test and must not use the public update service during validation. Before native publication, verify the untouched published Electron app through download, approval, replacement and relaunch, as well as the signed native Sparkle upgrade separately.
 

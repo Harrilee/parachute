@@ -1,15 +1,15 @@
 # Electron to native macOS migration
 
-Migration uses **two separate PRs and releases**: first publish the **0.3.9 Electron bridge**, then the **0.4.0 native app** (build **400000**). The bridge prevents the old updater from offering a macOS 14-only app to older systems. This native branch removes Electron source and build tooling. It consumes the bridge's reviewed artifacts and contains a small new native relaunch helper, migration tests and feed generation. Preparing those artifacts does not publish a release or change an installed application.
+Migration uses **two separate PRs and releases**: first publish the **0.3.9 Electron bridge**, then the **1.0.0 native app** (build **1000000**). The bridge prevents the old updater from offering a macOS 14-only app to older systems. This native branch removes Electron source and build tooling. It consumes the bridge's reviewed artifacts and contains a small new native relaunch helper, migration tests and feed generation. Preparing those artifacts does not publish a release or change an installed application.
 
 ## Release and feed contract
 
 | Release | Purpose | Assets |
 | --- | --- | --- |
 | `v0.3.9` | Existing Electron updater and legacy compatibility | `Parachute-darwin-arm64-0.3.9.zip`, `Parachute-darwin-x64-0.3.9.zip`; installers belong to that release's workflow |
-| `v0.4.0` | Native installation and Sparkle | `Parachute-native-arm64-0.4.0.zip`, `Parachute-native-x64-0.4.0.zip`, and corresponding native PKGs |
+| `v1.0.0` | Native installation and Sparkle | `Parachute-native-arm64-1.0.0.zip`, `Parachute-native-x64-1.0.0.zip`, and corresponding native PKGs |
 
-The inspected public service scans the **first 100 GitHub releases**, skips drafts, prereleases and invalid semantic versions, and searches for matching platform/architecture assets. It can continue to older releases when a newer release has no matching asset. Its reported version comes from the selected release tag. Keep native ZIP names free of the service's `mac`, `darwin` and `osx` patterns: `Parachute-native-...` ZIPs are skipped, allowing an old 0.3.8 client to find the prior stable 0.3.9 bridge release. **Do not copy bridge ZIPs into 0.4.0 or every later native release.** The bridge stops using the public updater and consults its pinned native migration feed instead.
+The inspected public service scans the **first 100 GitHub releases**, skips drafts, prereleases and invalid semantic versions, and searches for matching platform/architecture assets. It can continue to older releases when a newer release has no matching asset. Its reported version comes from the selected release tag. Keep native ZIP names free of the service's `mac`, `darwin` and `osx` patterns: `Parachute-native-...` ZIPs are skipped, allowing an old 0.3.8 client to find the prior stable 0.3.9 bridge release. **Do not copy bridge ZIPs into 1.0.0 or every later native release.** The bridge stops using the public updater and consults its pinned native migration feed instead.
 
 This routing has a finite history limit, not an indefinite compatibility guarantee. Keep the signed 0.3.9 release/assets available, monitor the public feed for both architectures and the release's position within the service's first 100 results. Before 0.3.9 falls outside that window, establish and test a stable legacy routing endpoint or equivalent compatibility routing that existing clients can actually reach. A new endpoint alone cannot redirect an untouched 0.3.8 app's hardcoded URL. Recheck the upstream selection rules before relying on future release behavior.
 
@@ -19,16 +19,16 @@ Generate two permanent first-native-update manifests:
 python3 native/migration/generate-feeds.py PATH_TO_REVIEW_ARTIFACTS
 ```
 
-The checked-in `updates/electron-migration-*.json` files remain no-update placeholders (`{"currentRelease":"0.3.9","releases":[]}`) through the native PR merge. Generating candidate manifests writes review artifacts; it does not activate migration. Only after the signed 0.4.0 native ZIPs have been verified and published should the placeholders be replaced through a reviewed feed update at:
+The checked-in `updates/electron-migration-*.json` files remain no-update placeholders (`{"currentRelease":"0.3.9","releases":[]}`) through the native PR merge. Generating candidate manifests writes review artifacts; it does not activate migration. Only after the signed 1.0.0 native ZIPs have been verified and published should the placeholders be replaced through a reviewed feed update at:
 
 - `https://raw.githubusercontent.com/Harrilee/parachute/main/updates/electron-migration-arm64.json`
 - `https://raw.githubusercontent.com/Harrilee/parachute/main/updates/electron-migration-x64.json`
 
-Both manifests stay pinned to **0.4.0** and its original `v0.4.0/Parachute-native-{arch}-0.4.0.zip` URLs. Future native updates use Sparkle. Do not advance the bridge manifests to later native builds that may drop the migration helper, raise the minimum OS, or change architecture support.
+Both manifests stay pinned to **1.0.0** and its original `v1.0.0/Parachute-native-{arch}-1.0.0.zip` URLs. Future native updates use Sparkle. Do not advance the bridge manifests to later native builds that may drop the migration helper, raise the minimum OS, or change architecture support.
 
 The old service has no OS-version filter. The 0.3.9 bridge registers its device IPC handlers, opens its existing interface, and starts background migration checks independently of the legacy administrator-access check. Cancelling that authorization leaves the bridge window and updater available. Device and tunnel operations retain their existing authorization requirements.
 
-- macOS 14 or later, arm64/x64: make an abortable manifest preflight with a 10-second deadline. Only a manifest naming native 0.4.0 and its exact architecture-specific GitHub asset URL starts Electron's `serverType: 'json'` updater. The deadline covers the manifest preflight, not the native ZIP download.
+- macOS 14 or later, arm64/x64: make an abortable manifest preflight with a 10-second deadline. Only a manifest naming native 1.0.0 and its exact architecture-specific GitHub asset URL starts Electron's `serverType: 'json'` updater. The deadline covers the manifest preflight, not the native ZIP download.
 - Earlier macOS or an unsupported architecture: keep the legacy interface and do not request a native migration feed or ZIP.
 - HTTP 404/204, an empty body, or the 0.3.9 no-update placeholder: leave the working interface unchanged without a migration dialog. Network, malformed-feed and other HTTP failures are logged without blocking the interface.
 - Retry eligible checks every 10 minutes. Do not overlap a pending preflight or updater check/download. Stop checking once a download is ready or the application quits.
@@ -92,12 +92,12 @@ Run real signed-bundle replacement without launching any application main:
 python3 native/migration/test-shipit.py \
   --legacy PATH_TO_PUBLISHED_0.3.8_ZIP \
   --report-directory NEW_REPORT_DIRECTORY \
-  PATH_TO_SIGNED_0.3.9_BRIDGE_ZIP PATH_TO_SIGNED_0.4.0_NATIVE_ZIP
+  PATH_TO_SIGNED_0.3.9_BRIDGE_ZIP PATH_TO_SIGNED_1.0.0_NATIVE_ZIP
 ```
 
 The script pins the initial archive's SHA-256, creates fresh copies under `/private/tmp`, and uses each currently installed Electron version's genuine ShipIt executable for the next replacement. Every request sets `launchAfterInstallation` to `false`. It verifies strict signatures, the previous app's designated requirement, a changed target inode, and the complete installed bundle's file/symlink hash. It preserves JSON evidence and ShipIt logs, then removes its temporary application copies and uniquely named test preference domains. It accepts no installed-app destination and never invokes the Electron or native application main.
 
-The fixture itself passed locally against the published arm64 app (0.3.8 → 0.3.8). That baseline validates the harness protocol; the 0.3.9 → 0.4.0 chain must use the exact new signed artifacts. Earlier signed CI/component evidence for a prepared 1.0.0 candidate is superseded preparation evidence, not a published release or proof that the current 0.4.0 chain passed. This component test bypasses HTTP routing, updater download/extraction, user approval, and automatic relaunch, and does not validate minimum-OS behavior.
+The fixture itself passed locally against the published arm64 app (0.3.8 → 0.3.8). That baseline validates the harness protocol; the 0.3.9 → 1.0.0 chain must use the exact new signed artifacts. Earlier signed CI/component evidence used the same 1.0.0 version number but an older source revision and release design. It is superseded preparation evidence, not a published release or proof that the current 0.3.9 → 1.0.0 chain passed. This component test bypasses HTTP routing, updater download/extraction, user approval, and automatic relaunch, and does not validate minimum-OS behavior.
 
 Separately, in a macOS GUI session:
 
@@ -114,10 +114,10 @@ The untouched published Electron app’s complete download/approval/replacement/
 1. Use disposable macOS VMs/accounts with no device/USB passthrough, no production app installation, and no production updater traffic. Test Apple Silicon and Intel; include macOS 14 and a supported pre-14 OS for the compatibility path.
 2. Install an untouched signed published v0.3.8 app inside the disposable environment. Preserve its archive hash, designated requirement, architecture, installed path, and initial profile. Test normal and user-renamed bundle paths, writable user Applications and a normal `/Applications` install.
 3. Redirect `update.electronjs.org` **inside that disposable environment only** to a controlled HTTPS test server, using a test CA trusted only there. Return the same response shape as the public service, pointing to the signed bridge artifact. Do not patch `app.asar`, re-sign the old app, edit host DNS/trust, or change the production release/feed. The old app hardcodes its feed and has ASAR integrity fuses, so a patched copy would not constitute this test.
-4. Intercept the bridge's exact `raw.githubusercontent.com/.../updates/electron-migration-{arch}.json` request within that environment and serve the generated static manifest with isolated artifact URLs. Native ZIPs must have their production identity, signature, helper layout and minimum OS. Keep production endpoints blocked so a test cannot accidentally download a real release.
+4. Intercept the bridge's exact `raw.githubusercontent.com/.../updates/electron-migration-{arch}.json` request within that environment. Serve the generated manifest with its exact pinned GitHub asset URL unchanged: the bridge validates that URL before starting Squirrel. Intercept that download URL and its redirects inside the same disposable environment to serve the reviewed test artifact; do not change the application or manifest URL to a different host. Native ZIPs must have their production identity, signature, helper layout and minimum OS. Block other production traffic so the test cannot accidentally download a real release.
 5. Exercise the old update approval/quit flow, then verify signed v0.3.8 → signed bridge → signed native replacement and relaunch. Record network requests and ShipIt logs, final on-disk hash/version, same installation path, helper exit status, and successful native launch. The original app and the 0.3.9 bridge may request legacy device authorization; contain those calls wholly inside the disposable environment, with no phone or access to host services. Verify that cancelling authorization in the bridge does not prevent its window or update checks, download completion offers Restart/Later, and only explicit approval causes immediate restart.
 6. On pre-14 macOS, verify the bridge opens the compatible legacy app and never requests a native ZIP. Test the checked-in no-update placeholder, missing feed, offline/error and preflight-timeout paths without delaying the bridge interface. Verify retry/non-overlap and choosing Later, including the documented installation on a later normal quit. On supported macOS, verify corrupted ZIPs, wrong bundle IDs and wrong publisher signatures are rejected while the installed old app remains usable.
-7. Separately test native 0.4.0 (build 400000) → a signed higher-build native fixture through an isolated Sparkle appcast. This does not substitute for the original Electron migration test.
+7. Separately test native 1.0.0 (build 1000000) → a signed higher-build native fixture through an isolated Sparkle appcast. This does not substitute for the original Electron migration test.
 
 Changing a disposable copy of the updater's feed or linking the old Squirrel framework into a test harness is useful additional component testing, but does not prove that an untouched published v0.3.8 app can complete this chain. Keep that distinction in CI/PR validation notes.
 

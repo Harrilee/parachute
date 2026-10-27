@@ -35,13 +35,13 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(to: folder.appen
         cpu = "arm64" if os.uname().machine == "arm64" else "x64"
         info = {
             "CFBundleIdentifier": "com.electron.parachute",
-            "CFBundleVersion": "400000", "CFBundleShortVersionString": "0.4.0",
+            "CFBundleVersion": "1000000", "CFBundleShortVersionString": "1.0.0",
             "CFBundleExecutable": "Parachute", "CFBundleName": "Parachute",
             "CFBundlePackageType": "APPL", "LSMinimumSystemVersion": "14.0",
             "ParachuteUpdatesEnabled": True, "SUPublicEDKey": public_key,
             "SUFeedURL": f"https://raw.githubusercontent.com/Harrilee/parachute/main/updates/appcast-{cpu}.xml",
         }
-        archive = root / f"Parachute-native-{cpu}-0.4.0.zip"
+        archive = root / f"Parachute-native-{cpu}-1.0.0.zip"
         output = root / f"appcast-{cpu}.xml"
 
         def create_archive():
@@ -53,7 +53,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(to: folder.appen
         def run(expected_success=True, key=private_key, extras=()):
             result = subprocess.run([
                 str(GENERATOR), "--archive", str(archive), "--architecture", cpu,
-                "--version", "0.4.0", "--build", "400000",
+                "--version", "1.0.0", "--build", "1000000",
                 "--download-base-url", "https://example.invalid/test/",
                 "--public-key-file", str(root / "public.txt"), "--output", str(output), *extras,
             ], input=key, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -64,7 +64,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(to: folder.appen
         run(extras=("--sha256", hashlib.sha256(archive.read_bytes()).hexdigest()))
         original = output.read_bytes()
         parsed = ET.parse(output)
-        assert parsed.findtext(f"channel/item/{{{SPARKLE}}}version") == "400000"
+        assert parsed.findtext(f"channel/item/{{{SPARKLE}}}version") == "1000000"
         assert parsed.findtext(f"channel/item/{{{SPARKLE}}}minimumSystemVersion") == "14.0.0"
         assert parsed.find("channel/item/enclosure").get("length") == str(archive.stat().st_size)
         assert b"edSignature" in original

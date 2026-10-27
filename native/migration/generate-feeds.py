@@ -10,15 +10,15 @@ args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 for architecture in ("arm64", "x64"):
     payload = {
-        "currentRelease": "0.4.0",
+        "currentRelease": "1.0.0",
         "releases": [{
-            "version": "0.4.0",
+            "version": "1.0.0",
             "updateTo": {
-                "version": "0.4.0",
-                "name": "Parachute 0.4.0",
+                "version": "1.0.0",
+                "name": "Parachute 1.0.0",
                 "notes": "The native macOS version of Parachute.",
-                "url": "https://github.com/Harrilee/parachute/releases/download/v0.4.0/"
-                       f"Parachute-native-{architecture}-0.4.0.zip",
+                "url": "https://github.com/Harrilee/parachute/releases/download/v1.0.0/"
+                       f"Parachute-native-{architecture}-1.0.0.zip",
             },
         }],
     }

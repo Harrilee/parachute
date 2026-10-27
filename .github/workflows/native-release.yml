@@ -6,11 +6,11 @@ on:
     inputs:
       version:
         required: true
-        default: '0.4.0'
+        default: '1.0.0'
         type: string
       build_number:
         required: true
-        default: '400000'
+        default: '1000000'
         type: string
       bridge_run_id:
         description: Optional successful Electron 0.3.9 CI run for PR-only migration validation
@@ -35,12 +35,12 @@ on:
       version:
         description: Native marketing version
         required: true
-        default: '0.4.0'
+        default: '1.0.0'
         type: string
       build_number:
         description: Monotonically increasing native build number
         required: true
-        default: '400000'
+        default: '1000000'
         type: string
       bridge_run_id:
         description: Optional successful Electron 0.3.9 CI run for PR-only migration validation
@@ -133,10 +133,7 @@ jobs:
         run: bash native/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
       - name: Native tests
         run: |
-          python3 native/release/test-run-bounded.py
-          python3 native/release/test-stapler-retry.py
-          python3 native/release/test-component-package.py
-          python3 native/release/test-bridge-source.py
+          python3 native/Tests/ReleaseToolsTests.py
           NATIVE_TEST_SPARKLE=1 bash native/test.sh
       - name: Exercise actual Sparkle install and relaunch in an isolated fixture
         run: |
@@ -170,10 +167,6 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash native/release/import-signing.sh
-      - name: Create unsigned installer signing probe (60 second limit)
-        run: bash native/release/probe-installer.sh create
-      - name: Verify installer key access (60 second limit)
-        run: bash native/release/probe-installer.sh sign
       - name: Sign native app and nested code
         run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" sign
       - name: Notarize native app and create stapled ZIP
@@ -216,16 +209,6 @@ jobs:
           path: |
             native/build/sparkle-upgrade-*/result.json
             native/build/sparkle-upgrade-*/events.jsonl
-          if-no-files-found: warn
-          retention-days: 30
-      - name: Upload native installer signing preflight logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: installer-preflight-native-${{ matrix.asset_arch }}
-          path: |
-            ${{ runner.temp }}/installer-preflight/*.log
-            ${{ runner.temp }}/installer-preflight/*.sample.txt
           if-no-files-found: warn
           retention-days: 30
       - name: Remove ephemeral signing keychain
