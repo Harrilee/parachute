@@ -1,0 +1,12 @@
+{
+  "version": "0.3.9",
+  "sourceCommit": "b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05",
+  "archives": {
+    "arm64": {
+      "sha256": "abd6951170b318dd853fe26f8a305bb82827f029959fbf879a551a42182008fb"
+    },
+    "x64": {
+      "sha256": "bf41ed761272a7e374f1c14021b2d0e18a1c8acb811a67b409410757f5d2f6d4"
+    }
+  }
+}

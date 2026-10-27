@@ -1,0 +1,8 @@
+{
+  "version": "2.10.1",
+  "url": "https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz",
+  "sha256": "1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27",
+  "source": "Official sparkle-project/Sparkle release asset; GitHub API SHA-256 digest verified 2026-10-26",
+  "minimumMacOS": "12.0",
+  "architectures": ["arm64", "x86_64"]
+}

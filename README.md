@@ -12,16 +12,16 @@ English | [简体中文](./README.zh-CN.md)
 
 
 
-Parachute is a macOS application that allows users to change the virtual location of their iPhone and iPad. It is compatible with latest iOS 27 version.
+Parachute is a native macOS application for changing the virtual location of an iPhone or iPad. Version 1.0.0 uses SwiftUI and Apple Maps, with English and Chinese interfaces and automatic light and dark appearance. Requires macOS 14 or later.
 
 ## Current Architecture
 
 | Component     | Description                                                              |
 | ------------- | ------------------------------------------------------------------------ |
-| Frontend      | Electron, React, Webpack, MUI                                           |
-| Backend       | [go-ios](https://github.com/danielpaulus/go-ios) (compiled Go binary), Node.js |
-| Communication | Electron IPC                                                             |
-| Map           | AMap, Open Street Map                                                    |
+| Frontend      | SwiftUI and AppKit                                           |
+| Backend       | Swift services and pinned [go-ios](https://github.com/Harrilee/go-ios) binary |
+| Communication | Asynchronous subprocesses with structured arguments                                                             |
+| Map           | Apple MapKit (standard and satellite maps, address search)                                                    |
 
 ## Installation
 
@@ -31,7 +31,7 @@ Download the latest release from the [GitHub Releases](https://github.com/Harril
 
 1. Download the `.pkg` installer, or the `.zip` for your architecture (**arm64** for Apple Silicon, **x64** for Intel).
 2. Install the `.pkg`, or extract the `.zip` and move **Parachute** to your Applications folder.
-3. The app requires administrator privileges for USB device tunneling on iOS 17+. You will be prompted for your password on launch.
+3. Connect and trust your device, then enable Developer Mode when prompted. The native app uses a userspace tunnel without an administrator password; iOS 17.0–17.4 requires an existing compatible tunnel.
 
 ## Support
 
@@ -41,46 +41,50 @@ If Parachute is useful to you, please consider supporting its development via [G
 
 1. Connect your iPhone via USB and trust the computer.
 2. Enable developer mode if prompted.
-3. Pick a location on the map.
+3. Pick a location on the map, search for an address, or enter coordinates.
 4. Click the button to set or update your location.
 
 ## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+
-- [Go](https://go.dev/) 1.22+ (`brew install go`)
+- macOS 26 or later with Xcode 26.2 or later to compile the layered app icon (the app itself runs on macOS 14 or later)
+- [Go](https://go.dev/) 1.24.4 for the pinned device helper
+- Python 3 for build and release scripts
 
 ### Getting started
 
 ```bash
-npm install    # installs deps and builds go-ios binary into bin/
-sudo npm start
+bash native/release/build-go-ios.sh "$(uname -m)" "$PWD/native/build/ios-native"
+NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
+open native/build/Parachute.app
 ```
 
-`npm install` automatically clones and compiles [go-ios](https://github.com/Harrilee/go-ios) (branch `v1.0.204`) via the `postinstall` script. To force a rebuild:
+The local build uses a separate application identity with automatic updates disabled. The native helper retains the pinned [go-ios](https://github.com/Harrilee/go-ios) source and dependencies, adding a device acknowledgement for the success animation. It does not require `sudo`.
 
-```bash
-FORCE_REBUILD=1 ./scripts/download-go-ios.sh
-```
-
-`sudo` is required for USB device tunneling on iOS 17+ devices.
+This source tree contains the native macOS application. The [Electron 0.3.9 transition implementation](https://github.com/Harrilee/parachute/tree/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05) is retained at its merged source revision. Release validation checks migration from published 0.3.9 using pinned archive hashes; see the [native release procedure](native/release/README.md).
 
 ### Building locally
 
 ```bash
-npm run make
+bash native/test.sh
+NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
 ```
 
-Distributable artifacts are written to `out/make/`.
+The local app is written to `native/build/Parachute.app`. Signed release builds use the scripts in [native/release](native/release/README.md).
 
 ### Releasing
 
-Push a version tag to trigger the CI/CD pipeline:
+Build signed native 1.0.0 artifacts after the published 0.3.9 bridge and its archive pins are available:
 
 ```bash
-npm version patch   # or minor / major
-git push --follow-tags
+gh workflow run release.yml --ref <release-ref> -f version=1.0.0 -f build_number=1000000
 ```
 
-The [GitHub Actions workflow](.github/workflows/release.yml) builds macOS binaries for both arm64 and x64, then uploads them to a GitHub Release.
+After the build succeeds, the [native-only publisher](.github/workflows/publish.yml) can validate its artifacts or create a GitHub Release draft:
+
+```bash
+gh workflow run publish.yml --ref main -f action=draft -f source_run_id=<successful-native-run-id> -f source_commit=<40-character-commit> -f version=1.0.0
+```
+
+Use `action=validate` for a read-only check. After reviewing the draft and completing the [release checks](native/release/README.md), run the same publisher inputs with `action=publish`. Publication requires the source commit on `main` and migration evidence from the published 0.3.9 bridge. The publisher uploads existing signed artifacts without rebuilding them; updating the migration and Sparkle feeds remains a separate reviewed commit. Existing Electron users migrate through the bridge; systems below macOS 14 retain the Electron version.
