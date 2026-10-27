@@ -30,7 +30,7 @@ mkdir -p "$OUTPUT_DIR/.bridge-payload"
 ditto -x -k "$ZIP" "$OUTPUT_DIR/.bridge-payload"
 codesign --verify --deep --strict "$APP_PATH"
 codesign --verify --test-requirement "=anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"com.electron.parachute\"" "$APP_PATH"
-xcrun stapler validate "$APP_PATH"
+python3 "$SCRIPT_DIR/stapler-retry.py" validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
 /usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$MACH_ARCH"
 /usr/bin/lipo "$APP_PATH/Contents/Resources/ios" -verify_arch "$MACH_ARCH"
@@ -48,8 +48,8 @@ if [ "$PHASE" = all ] || [ "$PHASE" = build-pkg ]; then
 fi
 if [ "$PHASE" = all ] || [ "$PHASE" = notarize-pkg ]; then
 bash "$SCRIPT_DIR/notarize.sh" "$PKG" "$OUTPUT_DIR/bridge-pkg-notarization"
-xcrun stapler staple "$PKG"
-xcrun stapler validate "$PKG"
+python3 "$SCRIPT_DIR/stapler-retry.py" staple "$PKG"
+python3 "$SCRIPT_DIR/stapler-retry.py" validate "$PKG"
 pkgutil --check-signature "$PKG"
 spctl --assess --type install --verbose=2 "$PKG"
 if [ "${CI_INSTALL_TEST:-0}" = 1 ]; then

@@ -48,7 +48,7 @@ If Parachute is useful to you, please consider supporting its development via [G
 
 ### Prerequisites
 
-- Xcode 26.2 or later on a supported macOS build host (the app itself runs on macOS 14 or later)
+- macOS 26 or later with Xcode 26.2 or later to compile the layered app icon (the app itself runs on macOS 14 or later)
 - [Go](https://go.dev/) 1.24.4 for the pinned device helper
 - Python 3 for build and release scripts
 

@@ -106,6 +106,7 @@ jobs:
       - name: Native tests
         run: |
           python3 native/release/test-run-bounded.py
+          python3 native/release/test-stapler-retry.py
           NATIVE_TEST_SPARKLE=1 bash native/test.sh
       - name: Exercise actual Sparkle install and relaunch in an isolated fixture
         run: |

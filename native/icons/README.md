@@ -54,11 +54,32 @@ to shipping the layered catalog.
 
 Validation: all six appearances rendered successfully with Apple's signed Icon
 Composer 1.2 `ictool`; the missing-compiler release failure and local fallback
-paths were exercised. Actual `actool` compilation and Dock appearance switching
-remain to be verified on a full Xcode build host (this machine has Command Line
-Tools only). Rendered preview backgrounds are baked by the preview renderer; the
-runtime Clear material must be checked using the compiled catalog.
+paths were exercised. CI run [`40463878417`](https://github.com/Harrilee/parachute/actions/runs/40463878417)
+(commit `ac65c3d`) then compiled and validated the icon successfully on **both
+Apple Silicon and Intel**, using macOS 26 hosts and Xcode 26.2.
+
+The downloaded CI evidence and both final signed application ZIPs were inspected.
+Their `Assets.car` files contain `NSAppearanceNameAqua`,
+`NSAppearanceNameDarkAqua`, and `ISAppearanceTintable` AppIcon stacks, each with
+four rendered layers. Both catalogs also contain the classic `MultiSized Image`
+fallback at 16, 32, 64, 128, 256, 512, and 1024 pixels. The generated `AppIcon.icns`
+files decode successfully, and the final bundles retain `CFBundleIconName` /
+`CFBundleIconFile` set to `AppIcon` and `LSMinimumSystemVersion` set to `14.0`.
+The two architecture validation reports agree. The CI artifacts are
+`12716197185` (arm64) and `12716371876` (x64); `icon-evidence/` contains the
+catalog, metadata, fallback, and full `assetutil` records.
+
+Native builds use macOS 26 because the same Xcode 26.2 icon compiler crashed
+inside `AssetCatalogAgent-AssetRuntime` on macOS 15 in run `40463533218`, with
+missing CoreMedia symbols before catalog generation. Bridge and migration jobs
+retain macOS 15 coverage. Both native runner architectures and Xcode 26.2 are
+listed in the [official runner images](https://github.com/actions/runner-images).
+The build-host requirement does not raise the application's macOS 14 deployment
+target.
+
+These checks verify the compiled appearance data and decodable fallback, not
+actual Dock appearance switching or display on macOS 14/15. Those remain separate
+runtime checks. Preview backgrounds are baked by the preview renderer; they do
+not establish how the Clear material blends with the user's desktop.
 
 Reference: [Apple's Icon Composer workflow](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer).
-
-The release CI compiles icons on macOS 26 with Xcode 26.2. On macOS 15, that compiler crashes in AssetCatalogAgent because its rendering frameworks lack the required CoreMedia symbols; a newer SDK alone is insufficient. This build-host requirement does not change the application deployment target or the ICNS fallback for older systems.

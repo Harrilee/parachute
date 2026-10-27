@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OUTPUT_DIR="${1:?Usage: verify-artifacts.sh artifact-directory}"
 : "${RELEASE_ARCH:?Architecture is required}"
 : "${RELEASE_VERSION:?Version is required}"
@@ -14,7 +15,7 @@ ditto -x -k "$OUTPUT_DIR/$STEM.zip" "$STAGING_DIR"
 APP_PATH="$STAGING_DIR/Parachute.app"
 codesign --verify --deep --strict "$APP_PATH"
 codesign --verify --test-requirement "=anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"$BUNDLE_ID\"" "$APP_PATH"
-xcrun stapler validate "$APP_PATH"
+python3 "$SCRIPT_DIR/stapler-retry.py" validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
 python3 - "$APP_PATH/Contents/Info.plist" "$BUNDLE_ID" "$RELEASE_VERSION" "$BUILD_NUMBER" <<'PY'
 import plistlib, sys
@@ -26,7 +27,7 @@ PY
 /usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$RELEASE_ARCH"
 /usr/bin/lipo "$APP_PATH/Contents/Resources/ios" -verify_arch "$RELEASE_ARCH"
 pkgutil --check-signature "$OUTPUT_DIR/$STEM.pkg"
-xcrun stapler validate "$OUTPUT_DIR/$STEM.pkg"
+python3 "$SCRIPT_DIR/stapler-retry.py" validate "$OUTPUT_DIR/$STEM.pkg"
 # Actual installer execution is limited to GitHub's disposable macOS runners.
 # Do not launch the app here: installation/signing checks require no device.
 if [ "${CI_INSTALL_TEST:-0}" = 1 ]; then

@@ -42,8 +42,8 @@ if [ "$PHASE" = all ] || [ "$PHASE" = notarize-app ]; then
 # cannot hold a stapled ticket. Both Squirrel and Sparkle receive the same app.
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$STAGING_DIR/app-for-notary.zip"
 bash "$SCRIPT_DIR/notarize.sh" "$STAGING_DIR/app-for-notary.zip" "$OUTPUT_DIR/app-notarization"
-xcrun stapler staple "$APP_PATH"
-xcrun stapler validate "$APP_PATH"
+python3 "$SCRIPT_DIR/stapler-retry.py" staple "$APP_PATH"
+python3 "$SCRIPT_DIR/stapler-retry.py" validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$OUTPUT_DIR/$STEM.zip"
 fi
@@ -60,8 +60,8 @@ python3 "$SCRIPT_DIR/run-bounded.py" --timeout 600 --log "$OUTPUT_DIR/pkg-build.
 fi
 if [ "$PHASE" = all ] || [ "$PHASE" = notarize-pkg ]; then
 bash "$SCRIPT_DIR/notarize.sh" "$OUTPUT_DIR/$STEM.pkg" "$OUTPUT_DIR/pkg-notarization"
-xcrun stapler staple "$OUTPUT_DIR/$STEM.pkg"
-xcrun stapler validate "$OUTPUT_DIR/$STEM.pkg"
+python3 "$SCRIPT_DIR/stapler-retry.py" staple "$OUTPUT_DIR/$STEM.pkg"
+python3 "$SCRIPT_DIR/stapler-retry.py" validate "$OUTPUT_DIR/$STEM.pkg"
 pkgutil --check-signature "$OUTPUT_DIR/$STEM.pkg"
 spctl --assess --type install --verbose=2 "$OUTPUT_DIR/$STEM.pkg"
 cp "$APP_PATH/Contents/Resources/ios-build-info.txt" "$OUTPUT_DIR/$STEM-go-ios-build-info.txt"

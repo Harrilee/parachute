@@ -77,6 +77,11 @@ terminates only that group. The helper's tests cover success output, nonzero
 exits, child cleanup and preservation of an unrelated process. Apple notarization
 has a separate 30-minute wait limit. Submission IDs are written before waiting,
 and result/log JSON plus packaging logs are uploaded even after a job failure.
+Ticket stapling and validation retry up to three times only when `stapler`
+returns 68 with an explicit transient `NSURLErrorDomain` network error. Each
+attempt has a 120-second deadline, with 5- and 15-second backoffs. Invalid
+signatures, invalid tickets and certificate-trust errors fail immediately;
+exhausted network retries still fail the job. The retry tests never contact Apple.
 Immediately after importing credentials, two separate CI preflight steps create
 a tiny unsigned fixture PKG and sign it with `productsign`, each with a 60-second
 limit. The fixture is never installed or notarized. Its logs distinguish unsigned
