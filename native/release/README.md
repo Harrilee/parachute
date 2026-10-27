@@ -44,6 +44,8 @@ does not publish that release or make those URLs live. Publish assets before
 updating a production feed, and only after reviewing both architecture builds,
 migration behavior, installer checks, and the exact release commit.
 
+The first native release is a **single `v1.0.0` GitHub Release** containing both native artifacts and the two `Parachute-darwin-{arm64,x64}-0.3.9.zip` bridge assets. The legacy public updater reads the release tag as its version but selects the bridge ZIP by platform/architecture. The bridge itself disables that public updater and uses the pinned migration JSON feed, so it does not repeatedly install itself. Every later latest release must retain the same bridge ZIP assets to support dormant Electron installations; native ZIPs must keep their `native-` names. The migration JSON feeds always target 1.0.0, while Sparkle feeds advance to newer native builds.
+
 ## Build contract
 
 `build-go-ios.sh <arm64|x86_64> <output>` builds the existing pinned fork commit
@@ -97,3 +99,15 @@ and actual PKG installation require the signed CI jobs to succeed. A passing
 package job does not demonstrate old Electron upgrade/relaunch or a later
 Sparkle upgrade; those require the isolated migration/update tests described by
 the migration and updater documentation.
+
+## Explicit publication procedure
+
+1. Merge the reviewed PR, select the exact release commit, and dispatch `release.yml` for that commit with version `1.0.0` and build `1000000`. Require both native and both bridge jobs to pass. Complete the isolated signed migration test described in `native/migration/README.md` before exposing the release to legacy users.
+2. Download the four artifact bundles from that run into a clean directory. Verify their SHA-256 manifests, source commit, architectures, minimum OS, notarization results and PKG installation evidence. Keep the generated signed appcasts byte-for-byte unchanged. The unsigned fixture update tests are separate evidence, not a substitute for checking the production packages.
+3. Create `v1.0.0` at the tested commit and a **draft** GitHub Release. Upload both native ZIPs and PKGs, both bridge ZIPs, and the checksums. Bridge PKGs are for compatibility testing/rollback; do not present them as the recommended 1.0 installer. Write English release notes that identify macOS 14 as the native minimum. These are explicit maintainer actions; no workflow performs them.
+4. Publish the complete release after all assets are present. Then copy the two generated `electron-migration-*.json` and the two signed `appcast-*.xml` artifacts into `updates/` on `main` in a reviewed commit. Do not regenerate or edit a signed XML feed. Asset URLs must be live before the feed commit; bridge checks during the short transition fall back to the existing UI and retry on the next launch.
+5. Verify the public legacy feed selects a bridge ZIP for both architectures, and check all four published feed URLs and their downloads. Keep the 1.0.0 native ZIPs, pinned migration JSON and the bridge ZIPs permanently available for skipped-version upgrades.
+
+For future native releases, increase both the marketing version and numeric build, generate new Sparkle appcasts, and retain the original bridge ZIPs on the latest Release. Do not advance the Electron migration feed to a future build with a higher system requirement.
+
+Rollback before publication means discarding the CI artifacts. After publication, remove the affected appcast item to stop new offers; a lower Sparkle build number will not automatically downgrade users who already updated. Keep the signed 0.3.8/0.3.9 packages available for an explicit reinstall, and never rewrite an existing release tag or signed artifact in place.

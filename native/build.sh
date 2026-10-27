@@ -34,6 +34,7 @@ if [ "${NATIVE_RELEASE:-0}" = "1" ]; then
         -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
     mkdir -p "$APP_PATH/Contents/Frameworks"
     ditto "$SPARKLE_FRAMEWORK_PATH" "$APP_PATH/Contents/Frameworks/Sparkle.framework"
+    cp "$(dirname "$SPARKLE_FRAMEWORK_PATH")/LICENSE" "$APP_PATH/Contents/Resources/Sparkle-LICENSE.txt"
 else
     SWIFT_ARGS+=(-D LOCAL_PREVIEW)
 fi
