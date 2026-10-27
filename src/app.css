@@ -164,3 +164,42 @@ button:disabled {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+.coordinate-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #303740;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.coordinate-label {
+    margin-right: 4px;
+    color: #65707c;
+}
+
+.float-toolbox .coordinate-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    margin-top: 0;
+    padding: 0;
+    color: #536170;
+    background-color: transparent;
+}
+
+.coordinate-edit:hover {
+    color: #246bc2;
+    background-color: rgb(49 131 238 / 10%);
+}
+
+.coordinate-edit:focus-visible {
+    outline: 2px solid #3183ee;
+    outline-offset: 2px;
+}
