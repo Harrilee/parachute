@@ -23,8 +23,8 @@ assert [info[key] for key in ['CFBundleIdentifier', 'CFBundleShortVersionString'
 assert info['LSMinimumSystemVersion'] == '14.0'
 assert not any(key.startswith('NSLocation') for key in info), 'Current-location permission must not be requested'
 PY
-/usr/bin/lipo -verify_arch "$RELEASE_ARCH" "$APP_PATH/Contents/MacOS/Parachute"
-/usr/bin/lipo -verify_arch "$RELEASE_ARCH" "$APP_PATH/Contents/Resources/ios"
+/usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$RELEASE_ARCH"
+/usr/bin/lipo "$APP_PATH/Contents/Resources/ios" -verify_arch "$RELEASE_ARCH"
 pkgutil --check-signature "$OUTPUT_DIR/$STEM.pkg"
 xcrun stapler validate "$OUTPUT_DIR/$STEM.pkg"
 # Actual installer execution is limited to GitHub's disposable macOS runners.

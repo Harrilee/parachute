@@ -102,9 +102,35 @@ Never publish a feed before its referenced ZIP is available at its final URL.
 
 Configuration tests do not contact a network or create an updater session.
 The artifact helper verifies signatures and metadata, but that alone does not
-prove installation/relaunch. A real Sparkle upgrade must be tested using two
-isolated test builds and an isolated feed. Electron-to-native migration remains
-a separate test and must not use the public update service during validation.
+prove installation/relaunch. Run all deterministic tests, including signed
+appcast fixtures, with `NATIVE_TEST_SPARKLE=1 bash native/test.sh`.
+
+`python3 native/Tests/SparkleUpgradeTest.py` performs an actual Sparkle upgrade
+using two native fixture versions, a unique test bundle identifier, disposable
+EdDSA key, and a loopback-only HTTP server. It enables signed-feed and
+pre-extraction verification exactly as production does. The custom test user
+driver accepts download and installation without showing updater dialogs. The
+app is installed in an owned `native/build/sparkle-upgrade-<UUID>/Installed/`
+folder. It neither launches Parachute nor accesses devices, production feeds,
+production keys, or production preferences. The disposable private key is
+deleted before launching the fixture. Only the test preference domain and test
+cache are cleaned up afterward. A GUI login session is required for Launch
+Services to relaunch the app; CI explicitly warns if that capability is absent.
+
+On 2026-10-26, the Apple Silicon local run passed download, signed feed/ZIP
+verification, extraction, replacement, and relaunch: build `1` terminated and
+build `2` started at the same installed app path with a different process ID.
+The recorded run was `sparkle-upgrade-b95a7d5c-c2f8-4ad5-9ce1-5d1318f1465c`;
+its `result.json` records both loopback requests, old/new PIDs, installed bundle
+version, and lifecycle events. This is an **ad-hoc signed fixture** test. It does
+not verify a notarized Developer ID production application update, the actual
+Parachute UI's update interaction, or Intel installation/relaunch. CI results
+for each architecture provide separate evidence and must not be inferred from
+this local result. The service's production HTTPS configuration and preview
+isolation are covered independently by `UpdaterConfigurationTests.swift`.
+
+Electron-to-native migration remains a separate test and must not use the public
+update service during validation.
 
 Primary references: [programmatic setup](https://sparkle-project.org/documentation/programmatic-setup/),
 [publishing updates](https://sparkle-project.org/documentation/publishing/),

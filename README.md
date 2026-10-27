@@ -48,7 +48,7 @@ If Parachute is useful to you, please consider supporting its development via [G
 
 ### Prerequisites
 
-- macOS 14 or later and Xcode 26.2 or later (for the SwiftUI and MapKit SDKs)
+- Xcode 26.2 or later on a supported macOS build host (the app itself runs on macOS 14 or later)
 - [Go](https://go.dev/) 1.24.4 for the pinned device helper
 - Python 3 for build and release scripts
 

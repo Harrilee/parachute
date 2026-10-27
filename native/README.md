@@ -7,7 +7,8 @@ Parachute 1.0.0 uses SwiftUI, Apple MapKit and Sparkle 2. The Electron applicati
 Requires Xcode 26.2 or a compatible Swift compiler and macOS SDK, macOS 14 or later, and Go 1.24.4. The offline local helper build requires cached dependencies; `native/release/build-go-ios.sh` can fetch the locked dependencies on a fresh machine. The existing `../bin/ios` is preserved for Electron.
 
 ```sh
-bash native/build.sh
+bash native/release/build-go-ios.sh "$(uname -m)" "$PWD/native/build/ios-native"
+NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
 open 'native/build/Parachute.app'
 ```
 

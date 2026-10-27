@@ -35,8 +35,8 @@ fi
 [ "$(cat "$DESTINATION/.archive-sha256")" = "$SPARKLE_SHA256" ] || {
     echo 'Sparkle distribution cache does not match the pinned archive.' >&2; exit 1;
 }
-/usr/bin/lipo -verify_arch arm64 "$DESTINATION/Sparkle.framework/Sparkle"
-/usr/bin/lipo -verify_arch x86_64 "$DESTINATION/Sparkle.framework/Sparkle"
+/usr/bin/lipo "$DESTINATION/Sparkle.framework/Sparkle" -verify_arch arm64
+/usr/bin/lipo "$DESTINATION/Sparkle.framework/Sparkle" -verify_arch x86_64
 codesign --verify --deep --strict "$DESTINATION/Sparkle.framework"
 [ -x "$DESTINATION/bin/sign_update" ] && [ -x "$DESTINATION/bin/generate_appcast" ] && [ -x "$DESTINATION/bin/generate_keys" ]
 printf '%s\n' "$DESTINATION"

@@ -35,6 +35,8 @@ enum NativeQA {
         let arguments = ProcessInfo.processInfo.arguments
         guard let flag = arguments.firstIndex(of: "--snapshot"), arguments.indices.contains(flag + 1) else { return }
         let destination = arguments[flag + 1]
+        if arguments.contains("--light") { NSApp.appearance = NSAppearance(named: .aqua) }
+        if arguments.contains("--dark") { NSApp.appearance = NSAppearance(named: .darkAqua) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             let window = arguments.contains("--preview")
                 ? ensurePreviewWindow(arguments: arguments)

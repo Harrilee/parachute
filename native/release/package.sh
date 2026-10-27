@@ -23,8 +23,8 @@ read_plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$PLIST"; }
 [ "$(read_plist SUVerifyUpdateBeforeExtraction)" = true ]
 [ "$(read_plist SURequireSignedFeed)" = true ]
 case "$(read_plist SUFeedURL)" in https://*) ;; *) echo 'Sparkle feed must use HTTPS.' >&2; exit 1;; esac
-/usr/bin/lipo -verify_arch "$RELEASE_ARCH" "$APP_PATH/Contents/MacOS/Parachute"
-/usr/bin/lipo -verify_arch "$RELEASE_ARCH" "$APP_PATH/Contents/Resources/ios"
+/usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$RELEASE_ARCH"
+/usr/bin/lipo "$APP_PATH/Contents/Resources/ios" -verify_arch "$RELEASE_ARCH"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/parachute-package.XXXXXX")"

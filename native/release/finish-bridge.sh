@@ -27,14 +27,15 @@ codesign --verify --deep --strict "$APP_PATH"
 codesign --verify --test-requirement "anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"com.electron.parachute\"" "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
-/usr/bin/lipo -verify_arch "$MACH_ARCH" "$APP_PATH/Contents/MacOS/Parachute"
-/usr/bin/lipo -verify_arch "$MACH_ARCH" "$APP_PATH/Contents/Resources/ios"
+/usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$MACH_ARCH"
+/usr/bin/lipo "$APP_PATH/Contents/Resources/ios" -verify_arch "$MACH_ARCH"
 python3 - "$APP_PATH/Contents/Info.plist" <<'PY'
 import plistlib, sys
 with open(sys.argv[1], 'rb') as file: info = plistlib.load(file)
 assert info['CFBundleIdentifier'] == 'com.electron.parachute'
 assert info['CFBundleShortVersionString'] == '0.3.9'
 assert int(info.get('LSMinimumSystemVersion', '10.15').split('.')[0]) < 14
+assert not any(key.startswith('NSLocation') for key in info), 'Bridge must not request current location'
 PY
 SUBMIT_EXIT=0
 xcrun notarytool submit "$PKG" --keychain "$KEYCHAIN_PATH" --keychain-profile "$NOTARY_PROFILE" \

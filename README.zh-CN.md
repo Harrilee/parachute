@@ -45,7 +45,7 @@ Parachute 是一款原生 macOS 应用，可以修改 iPhone 和 iPad 的虚拟�
 
 ### 前置条件
 
-- macOS 14 或更高版本，以及 Xcode 26.2 或更高版本（提供 SwiftUI 和 MapKit SDK）
+- 支持 Xcode 26.2 或更高版本的 macOS 构建环境（应用本身支持 macOS 14 或更高版本）
 - [Go](https://go.dev/) 1.24.4，用于构建设备控制程序
 - Python 3，用于构建和发布脚本
 

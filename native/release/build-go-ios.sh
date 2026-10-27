@@ -38,7 +38,7 @@ git -C "$STAGING_DIR/source" apply "$NATIVE_DIR/go-ios/location-ack.patch"
 )
 go version -m "$STAGING_DIR/ios" | awk '$1 == "dep" { sub(/[[:space:]]+$/, ""); print }' | LC_ALL=C sort > "$STAGING_DIR/dependencies.txt"
 diff -u "$SCRIPT_DIR/go-ios-dependencies.txt" "$STAGING_DIR/dependencies.txt"
-/usr/bin/lipo -verify_arch "$ARCH" "$STAGING_DIR/ios"
+/usr/bin/lipo "$STAGING_DIR/ios" -verify_arch "$ARCH"
 mv "$STAGING_DIR/ios" "$OUTPUT"
 chmod +x "$OUTPUT"
 cat > "$OUTPUT.build-info.txt" <<INFO

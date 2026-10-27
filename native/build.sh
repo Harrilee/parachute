@@ -18,7 +18,7 @@ else
     BINARY="$NATIVE_DIR/build/ios-with-ack"
 fi
 BUILD_INFO="${NATIVE_GO_IOS_BUILD_INFO:-$BINARY.build-info.txt}"
-/usr/bin/lipo -verify_arch "$ARCH" "$BINARY"
+/usr/bin/lipo "$BINARY" -verify_arch "$ARCH"
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 NATIVE_SDK_PATH="${NATIVE_SDK_PATH:-$(xcrun --show-sdk-path)}"
 SWIFT_ARGS=()
@@ -29,7 +29,7 @@ if [ "${NATIVE_RELEASE:-0}" = "1" ]; then
     if [ -z "${SPARKLE_FRAMEWORK_PATH:-}" ]; then
         SPARKLE_FRAMEWORK_PATH="$(bash "$NATIVE_DIR/updater/fetch-sparkle.sh")/Sparkle.framework"
     fi
-    /usr/bin/lipo -verify_arch "$ARCH" "$SPARKLE_FRAMEWORK_PATH/Sparkle"
+    /usr/bin/lipo "$SPARKLE_FRAMEWORK_PATH/Sparkle" -verify_arch "$ARCH"
     SWIFT_ARGS+=(-F "$(dirname "$SPARKLE_FRAMEWORK_PATH")" -framework Sparkle
         -Xlinker -rpath -Xlinker @executable_path/../Frameworks)
     mkdir -p "$APP_PATH/Contents/Frameworks"
