@@ -75,7 +75,7 @@ PY
 cp -R "$NATIVE_DIR/Resources/". "$APP_PATH/Contents/Resources/"
 mkdir -p "$APP_PATH/Contents/Resources/Help"
 cp "$REPO_DIR/src/images/trust-computer.png" "$REPO_DIR/src/images/enable-devmode.png" "$APP_PATH/Contents/Resources/Help/"
-cp "$REPO_DIR/icon.icns" "$APP_PATH/Contents/Resources/AppIcon.icns"
+python3 "$NATIVE_DIR/icons/compile-icon.py" "$APP_PATH"
 cp "$BINARY" "$APP_PATH/Contents/Resources/ios"
 cp "$BUILD_INFO" "$APP_PATH/Contents/Resources/ios-build-info.txt"
 chmod +x "$APP_PATH/Contents/Resources/ios"

@@ -99,6 +99,8 @@ jobs:
           PY
           test "$(uname -m)" = "$RELEASE_ARCH"
           xcodebuild -version
+      - name: Verify multi-appearance icon compilation
+        run: bash native/icons/test-compile.sh "$RUNNER_TEMP/native-artifacts/icon-evidence"
       - name: Build pinned go-ios with success acknowledgement
         run: bash native/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
       - name: Native tests
@@ -137,6 +139,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash native/release/import-signing.sh
+      - name: Create unsigned installer signing probe (60 second limit)
+        run: bash native/release/probe-installer.sh create
+      - name: Verify installer key access (60 second limit)
+        run: bash native/release/probe-installer.sh sign
       - name: Sign native app and nested code
         run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" sign
       - name: Notarize native app and create stapled ZIP
@@ -177,6 +183,16 @@ jobs:
           path: |
             native/build/sparkle-upgrade-*/result.json
             native/build/sparkle-upgrade-*/events.jsonl
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload native installer signing preflight logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-preflight-native-${{ matrix.asset_arch }}
+          path: |
+            ${{ runner.temp }}/installer-preflight/*.log
+            ${{ runner.temp }}/installer-preflight/*.sample.txt
           if-no-files-found: warn
           retention-days: 30
       - name: Remove ephemeral signing keychain
@@ -282,6 +298,10 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash native/release/import-signing.sh
+      - name: Create unsigned installer signing probe (60 second limit)
+        run: bash native/release/probe-installer.sh create
+      - name: Verify installer key access (60 second limit)
+        run: bash native/release/probe-installer.sh sign
       - name: Build, sign and notarize bridge app
         env:
           DEBUG: electron-osx-sign*
@@ -312,6 +332,16 @@ jobs:
         with:
           name: electron-bridge-macos-${{ matrix.asset_arch }}-0.3.9
           path: ${{ runner.temp }}/bridge-artifacts/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload bridge installer signing preflight logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-preflight-bridge-${{ matrix.asset_arch }}
+          path: |
+            ${{ runner.temp }}/installer-preflight/*.log
+            ${{ runner.temp }}/installer-preflight/*.sample.txt
           if-no-files-found: warn
           retention-days: 30
       - name: Remove ephemeral signing keychain

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -49,7 +50,19 @@ with args.log.open('wb') as log:
             columns = line.split(None, 5)
             if len(columns) == 6 and columns[2] == str(process.pid):
                 record('Timed-out process: ' + line)
-        os.killpg(process.pid, signal.SIGTERM)
+        if Path(command[0]).name in {'productbuild', 'productsign', 'pkgbuild'} and shutil.which('sample'):
+            # Sample stack symbols only, never process memory or credentials.
+            sample_path = args.log.with_suffix(args.log.suffix + '.sample.txt')
+            try:
+                sample = subprocess.run(['sample', str(process.pid), '1', '-file', str(sample_path)],
+                                        capture_output=True, text=True, timeout=5)
+                record(json.dumps({'event': 'stack-sample', 'exitCode': sample.returncode, 'file': sample_path.name}))
+            except subprocess.TimeoutExpired:
+                record('Stack sampling exceeded its 5-second diagnostic limit.')
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:

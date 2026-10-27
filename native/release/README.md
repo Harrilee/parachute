@@ -77,6 +77,10 @@ terminates only that group. The helper's tests cover success output, nonzero
 exits, child cleanup and preservation of an unrelated process. Apple notarization
 has a separate 30-minute wait limit. Submission IDs are written before waiting,
 and result/log JSON plus packaging logs are uploaded even after a job failure.
+Immediately after importing credentials, two separate CI preflight steps create
+a tiny unsigned fixture PKG and sign it with `productsign`, each with a 60-second
+limit. The fixture is never installed or notarized. Its logs distinguish unsigned
+package creation from installer-key access before the full release is packaged.
 
 `sign-app.sh` signs Sparkle inside out in the framework's documented order,
 retains any Downloader XPC entitlements, and signs the go-ios executable,
