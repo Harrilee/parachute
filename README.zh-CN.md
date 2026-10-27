@@ -7,18 +7,18 @@
 ![Platform](https://img.shields.io/badge/platform-macOS-blue)
 [![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-support%20this%20project-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Harrilee)
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/0a0b6d2b-7f96-4a1a-8e50-28ecd1fe8861" />
+<img width="4507" height="2840" alt="MacBook Pro M5 16-inch Space Black" src="https://github.com/user-attachments/assets/1f3ea330-1c92-49c5-84b2-ae97c8e8e762" />
 
-Parachute 是一个 macOS 应用，可以帮助用户修改 iPhone 和 iPad 的虚拟定位，兼容最新的 iOS 27。
+Parachute 是一款原生 macOS 应用，可以修改 iPhone 和 iPad 的虚拟定位。0.4.0 版本采用 SwiftUI 和 Apple 地图，支持中英文界面，并跟随系统切换浅色与深色外观。需要 macOS 14 或更高版本。
 
 ## 当前架构
 
 | 组件 | 说明 |
 | --- | --- |
-| 前端 | Electron、React、Webpack、MUI |
-| 后端 | [go-ios](https://github.com/danielpaulus/go-ios)（编译后的 Go 二进制）和 Node.js |
-| 通信 | Electron IPC |
-| 地图 | 高德地图、Open Street Map |
+| 前端 | SwiftUI、AppKit |
+| 后端 | Swift 服务层与固定版本的 [go-ios](https://github.com/Harrilee/go-ios) 二进制 |
+| 通信 | 通过参数数组异步调用子进程 |
+| 地图 | Apple MapKit（标准地图、卫星图与地址搜索） |
 
 ## 安装
 
@@ -28,7 +28,7 @@ Parachute 是一个 macOS 应用，可以帮助用户修改 iPhone 和 iPad 的�
 
 1. 下载 `.pkg` 安装包，或者下载与你架构匹配的 `.zip`（Apple Silicon 用 **arm64**，Intel 用 **x64**）。
 2. 安装 `.pkg`，或者解压 `.zip` 后将 **Parachute** 拖到 `Applications` 文件夹。
-3. iOS 17+ 的 USB 隧道功能需要管理员权限，首次启动时会提示你输入密码。
+3. 连接设备并信任电脑，按提示开启开发者模式。原生应用使用用户态隧道，无需管理员密码；iOS 17.0–17.4 需要已运行的兼容隧道。
 
 ## 支持项目
 
@@ -38,46 +38,44 @@ Parachute 是一个 macOS 应用，可以帮助用户修改 iPhone 和 iPad 的�
 
 1. 用 USB 连接 iPhone，并在设备上点击“信任这台电脑”。
 2. 如有提示，请开启开发者模式。
-3. 在地图上选择一个位置。
+3. 在地图上选点、搜索地址，或手动输入经纬度。
 4. 点击按钮设置或更新定位。
 
 ## 开发
 
 ### 前置条件
 
-- [Node.js](https://nodejs.org/) 20+
-- [Go](https://go.dev/) 1.22+（`brew install go`）
+- macOS 26 或更高版本，以及 Xcode 26.2 或更高版本，用于编译分层图标（应用本身支持 macOS 14 或更高版本）
+- [Go](https://go.dev/) 1.24.4，用于构建设备控制程序
+- Python 3，用于构建和发布脚本
 
 ### 快速开始
 
 ```bash
-npm install    # 安装依赖并自动编译 go-ios 到 bin/
-sudo npm start
+bash native/release/build-go-ios.sh "$(uname -m)" "$PWD/native/build/ios-native"
+NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
+open native/build/Parachute.app
 ```
 
-`npm install` 会通过 `postinstall` 脚本自动克隆并编译 [go-ios](https://github.com/Harrilee/go-ios)（分支 `v1.0.204`）。如需强制重新编译：
+本地构建使用独立的应用标识，并关闭自动更新。设备控制程序沿用固定版本的 [go-ios](https://github.com/Harrilee/go-ios) 源码及依赖，只增加用于成功动画的设备回执，不需要 `sudo`。
 
-```bash
-FORCE_REBUILD=1 ./scripts/download-go-ios.sh
-```
-
-`sudo` 用于支持 iOS 17+ 设备的 USB 隧道能力。
+当前源码只包含原生 macOS 应用。Electron 0.3.9 过渡版及其源码可通过 Git 历史和对应的 release tag 获取。
 
 ### 本地构建
 
 ```bash
-npm run make
+bash native/test.sh
+NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
 ```
 
-构建产物会输出到 `out/make/`。
+本地应用输出到 `native/build/Parachute.app`。签名发布版本使用 [native/release](native/release/README.md) 中的脚本构建。
 
 ### 发布
 
-推送版本 tag 后会自动触发 CI/CD 流程：
+先发布 Electron 0.3.9 过渡版，再准备原生 0.4.0。发布前可用过渡版成功的 CI run ID 验证迁移：
 
 ```bash
-npm version patch   # 或 minor / major
-git push --follow-tags
+gh workflow run release.yml --ref <release-branch> -f version=0.4.0 -f build_number=400000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>
 ```
 
-[GitHub Actions workflow](.github/workflows/release.yml) 会为 arm64 和 x64 构建 macOS 版本，并上传到 GitHub Release。
+[GitHub Actions workflow](.github/workflows/release.yml) 会为 Apple Silicon 和 Intel 构建应用及 `.pkg` 安装包，完成签名和公证后上传 CI artifacts 供审查，不会自动发布 release 或更新源。按[发布说明](native/release/README.md)发布审查后的产物及签名的 Sparkle 更新索引。现有 Electron 用户通过兼容过渡版本升级；较旧的 macOS 系统保留 Electron 版本。

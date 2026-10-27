@@ -1,113 +1,44 @@
-name: Prepare Electron 0.3.9 migration artifacts
+name: Prepare macOS release
 
-# Review artifacts only; publication remains an explicit maintainer action.
+# Replaces automatic tag publication. Artifacts and update feeds are reviewed
+# before the explicit promotion described in native/release/README.md.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Native marketing version
+        required: true
+        default: '0.4.0'
+        type: string
+      build_number:
+        description: Monotonically increasing native build number
+        required: true
+        default: '400000'
+        type: string
+
+      bridge_run_id:
+        description: Optional successful Electron 0.3.9 CI run for PR-only migration validation
+        required: false
+        default: ''
+        type: string
+      bridge_commit:
+        description: Exact approved source commit for bridge_run_id
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
-
-concurrency:
-  group: electron-transition-${{ github.ref }}
-  cancel-in-progress: false
+  actions: read
 
 jobs:
-  bridge:
-    name: Electron 0.3.9 ${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-26
-          - arch: x64
-            runner: macos-26-intel
-    env:
-      ASSET_ARCH: ${{ matrix.arch }}
-      HUSKY: '0'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-      - name: Validate version and migration behavior
-        run: |
-          node -e "if(require('./package.json').version !== '0.3.9') process.exit(1)"
-          npm test
-          python3 scripts/release/test-run-bounded.py
-          python3 scripts/release/test-stapler-retry.py
-          python3 scripts/release/test-component-package.py
-      - name: Preserve the published go-ios executable
-        run: |
-          curl --fail --location --retry 3 \
-            "https://github.com/Harrilee/parachute/releases/download/v0.3.8/Parachute-darwin-$ASSET_ARCH-0.3.8.zip" \
-            -o "$RUNNER_TEMP/legacy.zip"
-          LEGACY_APP_ARCHIVE="$RUNNER_TEMP/legacy.zip" \
-            bash scripts/release/provision-legacy-ios.sh "$GITHUB_WORKSPACE" "$ASSET_ARCH"
-          npm ci
-      - name: Lint Electron sources
-        run: npm run lint
-      - name: Import existing Apple signing and notarization credentials
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
-          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash scripts/release/import-signing.sh
-      - name: Create unsigned installer signing probe
-        run: bash scripts/release/probe-installer.sh create
-      - name: Verify installer key access
-        run: bash scripts/release/probe-installer.sh sign
-      - name: Build and sign Electron app
-        run: npm run make -- --arch="$ASSET_ARCH" --targets=@electron-forge/maker-zip
-      - name: Notarize app and verify stapled ZIP
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash scripts/release/finish-bridge.sh out/make "$RUNNER_TEMP/bridge-artifacts" prepare
-      - name: Build and sign fixed-destination installer
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash scripts/release/finish-bridge.sh out/make "$RUNNER_TEMP/bridge-artifacts" build-pkg
-      - name: Notarize installer and verify installation
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CI_INSTALL_TEST: '1'
-        run: bash scripts/release/finish-bridge.sh out/make "$RUNNER_TEMP/bridge-artifacts" notarize-pkg
-      - name: Verify genuine 0.3.8 to 0.3.9 signed replacement
-        run: |
-          python3 scripts/release/test-shipit.py \
-            --legacy "$RUNNER_TEMP/legacy.zip" \
-            --report-directory "$RUNNER_TEMP/bridge-artifacts/migration-evidence" \
-            "$RUNNER_TEMP/bridge-artifacts/Parachute-darwin-$ASSET_ARCH-0.3.9.zip"
-      - name: Upload artifacts, manifests and verification evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: electron-bridge-macos-${{ matrix.arch }}-0.3.9
-          path: ${{ runner.temp }}/bridge-artifacts/*
-          if-no-files-found: warn
-          retention-days: 30
-      - name: Upload installer signing diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: installer-preflight-bridge-${{ matrix.arch }}
-          path: |
-            ${{ runner.temp }}/installer-preflight/*.log
-            ${{ runner.temp }}/installer-preflight/*.sample.txt
-          if-no-files-found: warn
-          retention-days: 30
-      - name: Remove ephemeral signing keychain
-        if: always()
-        run: |
-          KEYCHAIN_FILE="$RUNNER_TEMP/parachute-transition-signing.keychain-db"
-          if [ -f "$KEYCHAIN_FILE" ]; then security delete-keychain "$KEYCHAIN_FILE"; fi
+  prepare:
+    uses: ./.github/workflows/native-release.yml
+    with:
+      version: ${{ inputs.version }}
+      build_number: ${{ inputs.build_number }}
+      bridge_run_id: ${{ inputs.bridge_run_id }}
+      bridge_commit: ${{ inputs.bridge_commit }}
+      bundle_id: com.electron.parachute
+      feed_base_url: https://raw.githubusercontent.com/Harrilee/parachute/main/updates
+    secrets: inherit
