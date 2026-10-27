@@ -13,7 +13,7 @@ trap 'rm -rf "$STAGING_DIR"' EXIT
 ditto -x -k "$OUTPUT_DIR/$STEM.zip" "$STAGING_DIR"
 APP_PATH="$STAGING_DIR/Parachute.app"
 codesign --verify --deep --strict "$APP_PATH"
-codesign --verify --test-requirement "anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"$BUNDLE_ID\"" "$APP_PATH"
+codesign --verify --test-requirement "=anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"$BUNDLE_ID\"" "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
 python3 - "$APP_PATH/Contents/Info.plist" "$BUNDLE_ID" "$RELEASE_VERSION" "$BUILD_NUMBER" <<'PY'

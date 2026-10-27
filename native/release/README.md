@@ -97,9 +97,11 @@ the two signing identities for `APPLE_TEAM_ID`, stores notarytool credentials
 from `APPLE_ID` / `APPLE_PASSWORD`, and deletes the keychain in an always-run
 cleanup step. Successful signing and notarization are required; the existence of
 a Secret is not treated as validation of its contents.
-The installer key retains the access policy used by the previous successful CI
+Both imported keys retain the access policy used by the previous successful CI
 workflow so Apple's packaging helpers can sign without an interactive keychain
-prompt. This policy applies only inside the disposable signing keychain.
+prompt, including when the two certificates share a private key. The setup logs
+only whether their public keys match. This policy applies only inside the
+disposable signing keychain.
 
 Sparkle reads `SPARKLE_PRIVATE_KEY` through standard input. Its public counterpart
 is checked in at `native/updater/public-key.txt`. Private key material must never

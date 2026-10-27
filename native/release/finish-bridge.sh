@@ -29,7 +29,7 @@ PY
 mkdir -p "$OUTPUT_DIR/.bridge-payload"
 ditto -x -k "$ZIP" "$OUTPUT_DIR/.bridge-payload"
 codesign --verify --deep --strict "$APP_PATH"
-codesign --verify --test-requirement "anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"com.electron.parachute\"" "$APP_PATH"
+codesign --verify --test-requirement "=anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"com.electron.parachute\"" "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
 /usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$MACH_ARCH"
