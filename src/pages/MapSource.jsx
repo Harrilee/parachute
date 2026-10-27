@@ -1,3 +1,4 @@
+import { useLanguage } from '../i18n.jsx'
 import React, { useState } from 'react'
 import layerBlack from '../images/layer-black.png'
 import amapLogo from '../images/amap.png'
@@ -10,6 +11,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 
 
 export default function MapSource(props) {
+    const { t } = useLanguage()
     const {map, setMap} = props
     const [open, setOpen] = useState(false)
     const handleOpen = () => setOpen(true)
@@ -18,11 +20,11 @@ export default function MapSource(props) {
     return (
         <div className="map-source float-toolbox">
             <div className="title" onClick={handleOpen}>
-                <img src={layerBlack} alt="layer" width={20} height={20} />
-                <div className="layer-text">{map}</div>
+                <img src={layerBlack} alt={t('地图图层')} width={20} height={20} />
+                <div className="layer-text">{t(map)}</div>
             </div>
             <Dialog open={open} onClose={handleClose}>
-                <DialogTitle id="alert-dialog-title">选择地图源</DialogTitle>
+                <DialogTitle id="alert-dialog-title">{t('选择地图源')}</DialogTitle>
                 <DialogContent>
                     <DialogContentText id="alert-dialog-description">
                         <div className="map-source-list">
@@ -36,7 +38,7 @@ export default function MapSource(props) {
                                 <img src={openStreetMapLogo} alt="Open Street Map" width={128} height={128} />
                                 <div className="map-source-text">
                                     <span>Open Street Map</span>
-                                    <span className="description">位置信息更丰富</span>
+                                    <span className="description">{t('位置信息更丰富')}</span>
                                 </div>
                             </div>
                             <div
@@ -46,10 +48,10 @@ export default function MapSource(props) {
                                     handleClose()
                                 }}
                             >
-                                <img src={amapLogo} alt="高德地图" width={128} height={128} />
+                                <img src={amapLogo} alt={t('高德地图')} width={128} height={128} />
                                 <div className="map-source-text">
-                                    <span>高德地图</span>
-                                    <span className="description">适合中国大陆</span>
+                                    <span>{t('高德地图')}</span>
+                                    <span className="description">{t('适合中国大陆')}</span>
                                 </div>
                             </div>
                         </div>
