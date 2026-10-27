@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Parachute (arm64)</title>
+    <link>https://github.com/Harrilee/parachute</link>
+    <description>Parachute native macOS updates</description>
+    <item>
+      <title>Parachute 1.0.0</title>
+      <link>https://github.com/Harrilee/parachute/releases</link>
+      <sparkle:version>1000000</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>
+      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+      <pubDate>Tue, 27 Oct 2026 19:13:15 +0000</pubDate>
+      <enclosure url="https://github.com/Harrilee/parachute/releases/download/v1.0.0/Parachute-native-arm64-1.0.0.zip" length="10389428" type="application/octet-stream" sparkle:edSignature="aTqWr2lFi9Tn9OgPSijJqDqUhnHhlZy/4+OUA9SnmZBnu7obLrDEtD/ainwZw5QQQPUie0Qx6m6wqxmzUIaEDw=="></enclosure>
+    </item>
+  </channel>
+</rss><!-- sparkle-signatures:
+edSignature: IrRd6TcAh+oU/VlQ7YLNIfRhtuxd1xq12qsXdqRDWxxTN9BUFmbaSD3DmLzBAnm9hhIzlbmo+74iTadWGeITDw==
+length: 1305
+-->
