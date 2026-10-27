@@ -1,6 +1,6 @@
 # Electron to native macOS migration
 
-Migration uses **two separate PRs and releases**: first publish the **0.3.9 Electron bridge**, then the **1.0.0 native app** (build **1000000**). The bridge prevents the old updater from offering a macOS 14-only app to older systems. This native branch removes Electron source and build tooling. It consumes the bridge's reviewed artifacts and contains a small new native relaunch helper, migration tests and feed generation. Preparing those artifacts does not publish a release or change an installed application.
+Publish the **0.3.9 Electron bridge** before the **1.0.0 native app** (build **1000000**). The [transition implementation](https://github.com/Harrilee/parachute/tree/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05) is preserved at its merged source revision. The bridge protects systems below macOS 14; this native source tree consumes its reviewed artifacts and includes a small new relaunch helper. The [release procedure](../release/README.md) owns artifact provenance, publication steps and release gates.
 
 ## Release and feed contract
 
@@ -34,7 +34,7 @@ The old service has no OS-version filter. The 0.3.9 bridge registers its device 
 - Retry eligible checks every 10 minutes. Do not overlap a pending preflight or updater check/download. Stop checking once a download is ready or the application quits.
 - When the native download is ready, ask the user to **Restart and update** or **Later**, with **Later** selected by default. Only explicit restart approval calls `quitAndInstall`; restarting ends the current location simulation session. Choosing Later keeps the interface running, but Squirrel installs the staged update on the next normal quit. Its macOS API cannot cancel an update already in progress.
 
-This keeps 0.3.9 usable before the separate native release is available. The bridge's existing interface removes the location lookup control, strips location entitlement/usage strings, and denies browser permission requests. Native language selection follows macOS preferred/per-app languages; the bridge restart prompt uses the system language. The earlier custom language choice remains in the untouched Electron profile. Migration does not parse Chromium LevelDB or rewrite Apple language preferences. The separate 0.3.9 PR/release and Git history retain the old implementation for compatibility and rollback review; this native branch has no Electron build entry point.
+This keeps 0.3.9 usable before the separate native release is available. The bridge's existing interface removes the location lookup control, strips location entitlement/usage strings, and denies browser permission requests. Native language selection follows macOS preferred/per-app languages; the bridge restart prompt uses the system language. The earlier custom language choice remains in the untouched Electron profile. Migration does not parse Chromium LevelDB or rewrite Apple language preferences. The linked transition revision retains the old implementation for compatibility and rollback review; this source tree has no Electron build entry point.
 
 ## Inspected published application
 
@@ -53,7 +53,7 @@ The actual [v0.3.8 ZIPs](https://github.com/Harrilee/parachute/releases/tag/v0.3
 | Electron framework | `32.1.2` |
 | Bundled updater module | `update-electron-app` 3.3.0 |
 
-The old designated requirement requires the identifier above, Apple's Developer ID certificate classes, and leaf certificate team `YCP6FXQDL5`. It does not pin a certificate serial number. The native app must satisfy that old requirement, not merely carry any valid signature. The component harness pins the published archive hashes. The separate Electron 0.3.9 PR provisions the exact published go-ios executable without rebuilding or upgrading it; that provisioning and the Electron build pipeline are not retained in this native branch.
+The old designated requirement requires the identifier above, Apple's Developer ID certificate classes, and leaf certificate team `YCP6FXQDL5`. It does not pin a certificate serial number. The native app must satisfy that old requirement, not merely carry any valid signature. The component harness pins the published archive hashes. The transition implementation provisions the exact published go-ios executable without rebuilding or upgrading it; that pipeline is retained at the linked source revision.
 
 ## Why the native app includes a compatibility launcher
 
@@ -74,15 +74,11 @@ bash native/migration/build-launcher.sh PATH_TO_APP arm64
 # Use x64 for the Intel package.
 ```
 
-Sign the complete `Squirrel.framework` with the same Developer ID identity before signing the outer app. Its `Resources/ShipIt` path resolves to the framework executable; signing only the outer app is insufficient. The framework layout, strict nested ad-hoc signing, rejection of an unrelated target, and actual creation of a second instance while the first is running have been checked with a harmless local fixture. Developer ID validation and actual Squirrel replacement/relaunch require the signed artifact tests below.
+Sign the complete `Squirrel.framework` with the same Developer ID identity before signing the outer app. Its `Resources/ShipIt` path resolves to the framework executable; signing only the outer app is insufficient. The launcher fixture below checks framework layout, nested signatures, unrelated-target rejection and new-instance creation. Developer ID validation and actual Squirrel replacement/relaunch require the signed artifact tests.
 
-## Obtain the separate 0.3.9 bridge
+## Obtain the 0.3.9 bridge
 
-The Electron 0.3.9 bridge is implemented, built and reviewed in the first PR. This native-only branch consumes its signed artifacts; it does not stage an Electron checkout or run npm/Forge. It retains the new AppKit relaunch helper because the old updater requires its path after replacing the app.
-
-For prepublication PR validation, dispatch the native workflow with both `bridge_run_id` and `bridge_commit`. The latter is the approved exact 40-character commit. The resolver accepts a successful completed manual `.github/workflows/release.yml` run in `Harrilee/parachute`, from `feat/harrli/electron-transition-0.3.9` or `main`, with that exact source commit. It downloads `electron-bridge-macos-{arm64,x64}-0.3.9` and verifies the archive hashes and identity/version/run/commit in each `bridge-{arch}-manifest.json`. Evidence marks this source `releaseEligible=false`: a passing component test with CI bridge artifacts does not satisfy the published-0.3.9 prerequisite.
-
-For release validation, omit both CI-source inputs. The resolver then requires a stable published `v0.3.9` and a reviewed `native/release/bridge-release-pins.json`, containing version, exact source commit, and both architecture archive hashes. That file is deliberately absent until the 0.3.9 release can be inspected and pinned. `releaseEligible=true` establishes the bridge's published source; complete migration and native release gates still apply.
+Use the [bridge-source modes](../release/README.md#bridge-source-for-ci) in the native workflow. Before publication, an exact approved CI run/commit supports component testing with `releaseEligible=false`. Release preparation requires published 0.3.9 and reviewed archive/tag pins. This native tree never rebuilds Electron; its standalone AppKit helper implements only the relaunch contract.
 
 ## Isolated component tests
 
@@ -97,7 +93,7 @@ python3 native/migration/test-shipit.py \
 
 The script pins the initial archive's SHA-256, creates fresh copies under `/private/tmp`, and uses each currently installed Electron version's genuine ShipIt executable for the next replacement. Every request sets `launchAfterInstallation` to `false`. It verifies strict signatures, the previous app's designated requirement, a changed target inode, and the complete installed bundle's file/symlink hash. It preserves JSON evidence and ShipIt logs, then removes its temporary application copies and uniquely named test preference domains. It accepts no installed-app destination and never invokes the Electron or native application main.
 
-The fixture itself passed locally against the published arm64 app (0.3.8 → 0.3.8). That baseline validates the harness protocol; the 0.3.9 → 1.0.0 chain must use the exact new signed artifacts. Earlier signed CI/component evidence used the same 1.0.0 version number but an older source revision and release design. It is superseded preparation evidence, not a published release or proof that the current 0.3.9 → 1.0.0 chain passed. This component test bypasses HTTP routing, updater download/extraction, user approval, and automatic relaunch, and does not validate minimum-OS behavior.
+The component test bypasses HTTP routing, updater download/extraction, approval and automatic relaunch, and does not validate minimum-OS behavior. Test the exact signed bridge/native artifacts and retain their hashes with the report.
 
 Separately, in a macOS GUI session:
 

@@ -1,7 +1,6 @@
-name: Prepare macOS release
+name: Native macOS release artifacts
 
-# Replaces automatic tag publication. Artifacts and update feeds are reviewed
-# before the explicit promotion described in native/release/README.md.
+# Preparing artifacts never creates a tag, release, or public update feed.
 on:
   workflow_dispatch:
     inputs:
@@ -15,7 +14,6 @@ on:
         required: true
         default: '1000000'
         type: string
-
       bridge_run_id:
         description: Optional successful Electron 0.3.9 CI run for PR-only migration validation
         required: false
@@ -26,19 +24,227 @@ on:
         required: false
         default: ''
         type: string
+      bundle_id:
+        description: Bundle identity verified from the published Electron app
+        required: true
+        default: com.electron.parachute
+        type: string
+      feed_base_url:
+        description: Stable HTTPS directory for the reviewed architecture-specific appcasts
+        required: true
+        default: https://raw.githubusercontent.com/Harrilee/parachute/main/updates
+        type: string
 
 permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: native-release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  prepare:
-    uses: ./.github/workflows/native-release.yml
-    with:
-      version: ${{ inputs.version }}
-      build_number: ${{ inputs.build_number }}
-      bridge_run_id: ${{ inputs.bridge_run_id }}
-      bridge_commit: ${{ inputs.bridge_commit }}
-      bundle_id: com.electron.parachute
-      feed_base_url: https://raw.githubusercontent.com/Harrilee/parachute/main/updates
-    secrets: inherit
+  native:
+    name: Native ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            asset_arch: arm64
+            runner: macos-26
+          - arch: x86_64
+            asset_arch: x64
+            runner: macos-26-intel
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      BUNDLE_ID: ${{ inputs.bundle_id }}
+      RELEASE_ARCH: ${{ matrix.arch }}
+      ASSET_ARCH: ${{ matrix.asset_arch }}
+      FEED_BASE_URL: ${{ inputs.feed_base_url }}
+      BRIDGE_RUN_ID: ${{ inputs.bridge_run_id }}
+      BRIDGE_COMMIT: ${{ inputs.bridge_commit }}
+      RELEASE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.2'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.4'
+          cache: false
+      - name: Validate release inputs and runner
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', os.environ['RELEASE_VERSION'])
+          assert re.fullmatch(r'[1-9][0-9]*', os.environ['BUILD_NUMBER'])
+          run, commit = os.environ['BRIDGE_RUN_ID'], os.environ['BRIDGE_COMMIT']
+          assert bool(run) == bool(commit), 'Supply bridge_run_id and bridge_commit together'
+          if run:
+              assert re.fullmatch(r'[1-9][0-9]*', run)
+              assert re.fullmatch(r'[0-9a-f]{40}', commit)
+          assert re.fullmatch(r'[A-Za-z0-9.-]+', os.environ['BUNDLE_ID'])
+          assert os.environ['BUNDLE_ID'] == 'com.electron.parachute'
+          url = urlparse(os.environ['FEED_BASE_URL'])
+          assert url.scheme == 'https' and url.netloc and not url.query and not url.fragment
+          PY
+          test "$(uname -m)" = "$RELEASE_ARCH"
+          xcodebuild -version
+      - name: Build pinned go-ios with success acknowledgement
+        run: bash native/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
+      - name: Native tests
+        run: |
+          python3 native/Tests/ReleaseToolsTests.py
+          NATIVE_TEST_SPARKLE=1 bash native/test.sh
+      - name: Exercise actual Sparkle install and relaunch in an isolated fixture
+        run: |
+          if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
+            python3 native/Tests/SparkleUpgradeTest.py
+          else
+            echo '::warning::Sparkle install/relaunch fixture skipped: runner has no GUI login session.'
+          fi
+      - name: Fetch verified Sparkle framework
+        run: |
+          SPARKLE_ROOT="$(bash native/updater/fetch-sparkle.sh)"
+          printf 'SPARKLE_ROOT=%s\nSPARKLE_FRAMEWORK_PATH=%s/Sparkle.framework\n' "$SPARKLE_ROOT" "$SPARKLE_ROOT" >> "$GITHUB_ENV"
+      - name: Build release app
+        env:
+          NATIVE_RELEASE: '1'
+          NATIVE_ICON_REPORT: ${{ runner.temp }}/native-artifacts/icon-evidence/icon-validation.json
+          NATIVE_ARCH: ${{ matrix.arch }}
+          NATIVE_GO_IOS_BINARY: ${{ runner.temp }}/ios-native
+          NATIVE_GO_IOS_BUILD_INFO: ${{ runner.temp }}/ios-native.build-info.txt
+        run: |
+          export SPARKLE_FEED_URL="${FEED_BASE_URL%/}/appcast-$ASSET_ARCH.xml"
+          export SPARKLE_PUBLIC_KEY="$(cat native/updater/public-key.txt)"
+          bash native/build.sh "$RUNNER_TEMP/Parachute.app"
+          bash native/migration/build-launcher.sh "$RUNNER_TEMP/Parachute.app" "$ASSET_ARCH"
+      - name: Import existing Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash native/release/import-signing.sh
+      - name: Sign native app and nested code
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" sign
+      - name: Notarize native app and create stapled ZIP
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-app
+      - name: Build and sign native PKG (10 minute limit)
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" build-pkg
+      - name: Notarize and staple native PKG
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-pkg
+      - name: Verify ZIP and install PKG on disposable runner
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CI_INSTALL_TEST: '1'
+        run: bash native/release/verify-artifacts.sh "$RUNNER_TEMP/native-artifacts"
+      - name: Generate signed Sparkle feed for review
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | python3 native/updater/generate-appcast.py \
+            --archive "$RUNNER_TEMP/native-artifacts/Parachute-native-$ASSET_ARCH-$RELEASE_VERSION.zip" \
+            --architecture "$ASSET_ARCH" \
+            --version "$RELEASE_VERSION" --build "$BUILD_NUMBER" \
+            --download-base-url "https://github.com/Harrilee/parachute/releases/download/v$RELEASE_VERSION/" \
+            --public-key-file native/updater/public-key.txt \
+            --output "$RUNNER_TEMP/native-artifacts/appcast-$ASSET_ARCH.xml"
+      - name: Generate native migration feeds for review
+        run: python3 native/migration/generate-feeds.py "$RUNNER_TEMP/native-artifacts"
+      - name: Upload artifacts and notarization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-${{ matrix.asset_arch }}-${{ inputs.version }}
+          path: ${{ runner.temp }}/native-artifacts/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload Sparkle installation fixture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sparkle-upgrade-evidence-${{ matrix.asset_arch }}
+          path: |
+            native/build/sparkle-upgrade-*/result.json
+            native/build/sparkle-upgrade-*/events.jsonl
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove ephemeral signing keychain
+        if: always()
+        run: |
+          KEYCHAIN_FILE="$RUNNER_TEMP/parachute-native-signing.keychain-db"
+          if [ -f "$KEYCHAIN_FILE" ]; then security delete-keychain "$KEYCHAIN_FILE"; fi
+
+  migration-validation:
+    needs: native
+    name: Signed migration component ${{ matrix.asset_arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - asset_arch: arm64
+            runner: macos-15
+          - asset_arch: x64
+            runner: macos-15-intel
+    env:
+      ASSET_ARCH: ${{ matrix.asset_arch }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      BRIDGE_RUN_ID: ${{ inputs.bridge_run_id }}
+      BRIDGE_COMMIT: ${{ inputs.bridge_commit }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-macos-${{ matrix.asset_arch }}-${{ inputs.version }}
+          path: ${{ runner.temp }}/migration-inputs/native
+      - name: Verify and download the separately built Electron 0.3.9 bridge
+        run: |
+          python3 native/release/fetch-bridge-source.py --architecture "$ASSET_ARCH" \
+            --run-id "$BRIDGE_RUN_ID" --expected-commit "$BRIDGE_COMMIT" \
+            --output "$RUNNER_TEMP/migration-inputs/bridge"
+      - name: Exercise genuine Squirrel replacement on isolated signed copies
+        run: |
+          curl --fail --location --retry 3 --proto '=https' \
+            "https://github.com/Harrilee/parachute/releases/download/v0.3.8/Parachute-darwin-$ASSET_ARCH-0.3.8.zip" \
+            -o "$RUNNER_TEMP/migration-inputs/legacy.zip"
+          python3 native/migration/test-shipit.py \
+            --legacy "$RUNNER_TEMP/migration-inputs/legacy.zip" \
+            --report-directory "$RUNNER_TEMP/migration-report" \
+            "$RUNNER_TEMP/migration-inputs/bridge/Parachute-darwin-$ASSET_ARCH-0.3.9.zip" \
+            "$RUNNER_TEMP/migration-inputs/native/Parachute-native-$ASSET_ARCH-$RELEASE_VERSION.zip"
+      - name: Verify migration launcher using harmless app fixture
+        run: |
+          if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
+            python3 native/migration/test-launcher.py > "$RUNNER_TEMP/migration-report/launcher-result.log"
+          else
+            echo '::warning::Launcher fixture skipped: runner has no GUI login session.'
+          fi
+      - name: Upload migration component evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-evidence-${{ matrix.asset_arch }}
+          path: |
+            ${{ runner.temp }}/migration-report/*
+            ${{ runner.temp }}/migration-inputs/bridge/bridge-source.json
+          if-no-files-found: warn
+          retention-days: 30

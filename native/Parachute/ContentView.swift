@@ -159,28 +159,6 @@ struct ContentView: View {
             mapGestureMoved = false
             titlebarHovered = false
         }
-        #if LOCAL_QA
-        .onAppear {
-            if ProcessInfo.processInfo.arguments.contains("--selected") {
-                selected = Coordinates(latitude: 37.3346, longitude: -122.009)
-            }
-            if ProcessInfo.processInfo.arguments.contains("--pulse") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 7) {
-                    locationFeedback = LocationFeedback(id: UUID(),
-                        coordinate: CLLocationCoordinate2D(latitude: 37.3346, longitude: -122.009), startedAt: Date())
-                }
-            }
-            if ProcessInfo.processInfo.arguments.contains("--satellite") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { imagery = true }
-            }
-            if ProcessInfo.processInfo.arguments.contains("--guide") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { guide = true }
-            }
-            if ProcessInfo.processInfo.arguments.contains("--edit") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { editing = true }
-            }
-        }
-        #endif
         .sheet(isPresented: $editing) {
             CoordinateEditor(coordinate: selected) { value in
                 selected = value

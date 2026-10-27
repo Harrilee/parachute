@@ -37,14 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var device: DeviceService?
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        #if LOCAL_QA
-        if !ProcessInfo.processInfo.arguments.contains("--snapshot") {
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        NativeQA.start()
-        #else
         NSApp.activate(ignoringOtherApps: true)
-        #endif
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

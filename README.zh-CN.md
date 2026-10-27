@@ -59,7 +59,7 @@ open native/build/Parachute.app
 
 本地构建使用独立的应用标识，并关闭自动更新。设备控制程序沿用固定版本的 [go-ios](https://github.com/Harrilee/go-ios) 源码及依赖，只增加用于成功动画的设备回执，不需要 `sudo`。
 
-当前源码只包含原生 macOS 应用。Electron 0.3.9 过渡版及其源码可通过 Git 历史和对应的 release tag 获取。
+当前源码只包含原生 macOS 应用。[Electron 0.3.9 过渡版代码](https://github.com/Harrilee/parachute/tree/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05)保留在其合并后的源码版本中。请按[过渡版发布说明](https://github.com/Harrilee/parachute/blob/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05/docs/electron-transition.md)先发布并验证 0.3.9，再发布原生 1.0.0。
 
 ### 本地构建
 
@@ -72,7 +72,7 @@ NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
 
 ### 发布
 
-先发布 Electron 0.3.9 过渡版，再准备原生 1.0.0。发布前可用过渡版成功的 CI run ID 验证迁移：
+手动运行工作流，准备原生 1.0.0 的审查产物。正式发布要求先发布 0.3.9；在此之前，可用过渡版成功的 CI run ID 和对应提交验证迁移：
 
 ```bash
 gh workflow run release.yml --ref <release-branch> -f version=1.0.0 -f build_number=1000000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>

@@ -13,8 +13,8 @@ if [ -n "${NATIVE_GO_IOS_BINARY:-}" ]; then
     BINARY="$NATIVE_GO_IOS_BINARY"
 else
     # Same pinned source/dependencies with one device acknowledgement log.
-    bash "$NATIVE_DIR/go-ios/build-with-ack.sh"
     BINARY="$NATIVE_DIR/build/ios-with-ack"
+    bash "$NATIVE_DIR/release/build-go-ios.sh" "$ARCH" "$BINARY"
 fi
 BUILD_INFO="${NATIVE_GO_IOS_BUILD_INFO:-$BINARY.build-info.txt}"
 /usr/bin/lipo "$BINARY" -verify_arch "$ARCH"
@@ -22,7 +22,6 @@ mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources"
 NATIVE_SDK_PATH="${NATIVE_SDK_PATH:-$(xcrun --show-sdk-path)}"
 SWIFT_ARGS=()
 if [ "${NATIVE_RELEASE:-0}" = "1" ]; then
-    [ "${NATIVE_QA:-0}" != "1" ] || { echo 'QA cannot be a release build.' >&2; exit 1; }
     : "${RELEASE_VERSION:?}" "${BUILD_NUMBER:?}" "${BUNDLE_ID:?}" "${RELEASE_TEAM_ID:?}"
     : "${SPARKLE_PUBLIC_KEY:?}" "${SPARKLE_FEED_URL:?}"
     if [ -z "${SPARKLE_FRAMEWORK_PATH:-}" ]; then
@@ -36,9 +35,6 @@ if [ "${NATIVE_RELEASE:-0}" = "1" ]; then
     cp "$(dirname "$SPARKLE_FRAMEWORK_PATH")/LICENSE" "$APP_PATH/Contents/Resources/Sparkle-LICENSE.txt"
 else
     SWIFT_ARGS+=(-D LOCAL_PREVIEW)
-fi
-if [ "${NATIVE_QA:-0}" = "1" ]; then
-    SWIFT_ARGS+=(-D LOCAL_QA "$NATIVE_DIR/Tests/NativeQA.swift")
 fi
 xcrun swiftc "${SWIFT_ARGS[@]}" -sdk "$NATIVE_SDK_PATH" -swift-version 5 -O -target "$ARCH-apple-macos14.0" \
     "$NATIVE_DIR"/Parachute/*.swift -o "$APP_PATH/Contents/MacOS/Parachute"
@@ -66,13 +62,13 @@ if os.environ.get('NATIVE_RELEASE') == '1':
                 SUVerifyUpdateBeforeExtraction=True, SURequireSignedFeed=True)
 else:
     info['ParachuteUpdatesEnabled'] = False
-    if os.environ.get('NATIVE_QA') == '1':
-        info['CFBundleIdentifier'] += '.QA'
 with open(path, 'wb') as f:
     plistlib.dump(info, f)
 PY
 cp -R "$NATIVE_DIR/Resources/". "$APP_PATH/Contents/Resources/"
-python3 "$NATIVE_DIR/icons/compile-icon.py" "$APP_PATH"
+ICON_ARGS=()
+if [ -n "${NATIVE_ICON_REPORT:-}" ]; then ICON_ARGS+=(--report "$NATIVE_ICON_REPORT"); fi
+python3 "$NATIVE_DIR/icons/compile-icon.py" "$APP_PATH" "${ICON_ARGS[@]}"
 cp "$BINARY" "$APP_PATH/Contents/Resources/ios"
 cp "$BUILD_INFO" "$APP_PATH/Contents/Resources/ios-build-info.txt"
 chmod +x "$APP_PATH/Contents/Resources/ios"

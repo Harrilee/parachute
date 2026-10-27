@@ -62,7 +62,7 @@ open native/build/Parachute.app
 
 The local build uses a separate application identity with automatic updates disabled. The native helper retains the pinned [go-ios](https://github.com/Harrilee/go-ios) source and dependencies, adding a device acknowledgement for the success animation. It does not require `sudo`.
 
-This source tree contains the native macOS application. The Electron 0.3.9 transition release and its source remain available in Git history and its release tag.
+This source tree contains the native macOS application. The [Electron 0.3.9 transition implementation](https://github.com/Harrilee/parachute/tree/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05) is retained at its merged source revision. Follow the [transition release procedure](https://github.com/Harrilee/parachute/blob/b8d4ddf66153c6508bb0ba85b7ff5548ed4ebf05/docs/electron-transition.md); publish and verify 0.3.9 before native 1.0.0.
 
 ### Building locally
 
@@ -75,7 +75,7 @@ The local app is written to `native/build/Parachute.app`. Signed release builds 
 
 ### Releasing
 
-Publish the Electron 0.3.9 transition release first. Prepare native 1.0.0 artifacts with the manually dispatched workflow; use the successful transition CI run ID for prepublication migration validation:
+Prepare native 1.0.0 review artifacts with the manually dispatched workflow. Before the required 0.3.9 publication, use a successful transition CI run and exact commit for migration validation:
 
 ```bash
 gh workflow run release.yml --ref <release-branch> -f version=1.0.0 -f build_number=1000000 -f bridge_run_id=<successful-0.3.9-run-id> -f bridge_commit=<tested-0.3.9-commit>

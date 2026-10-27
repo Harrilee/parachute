@@ -5,7 +5,7 @@ URL and SHA-256 are recorded in `sparkle-version.json`; `fetch-sparkle.sh` verif
 the archive, framework signature, and both CPU architectures. Downloaded tools
 and frameworks stay in ignored `native/build/cache/`.
 
-Native 1.0.0 (build 1000000) follows the separately reviewed and published Electron 0.3.9 bridge release. Sparkle handles updates after the first native installation; it does not replace the bridge or its migration checks. This branch contains no Electron build pipeline.
+Sparkle handles updates after native 1.0.0 (build 1000000) is installed. The [release procedure](../release/README.md) covers the required preceding 0.3.9 publication, artifact provenance and feed promotion; [Electron migration](../migration/README.md) is a separate upgrade path.
 
 ## Application integration
 
@@ -28,7 +28,7 @@ Production configuration belongs in the signed application's Info.plist:
 
 Sparkle retains the user's preferences. The service does not reset them on
 launch. The validated feed in the signed bundle also overrides stale feed URL
-preferences. Builds compiled with `LOCAL_PREVIEW` or `LOCAL_QA`, or launched with
+preferences. Builds compiled with `LOCAL_PREVIEW`, or launched with
 `--preview`, never initialize Sparkle or request production updates.
 
 Stable feeds:
@@ -119,21 +119,7 @@ deleted before launching the fixture. Only the test preference domain and test
 cache are cleaned up afterward. A GUI login session is required for Launch
 Services to relaunch the app; CI explicitly warns if that capability is absent.
 
-On 2026-10-26, the Apple Silicon local run passed download, signed feed/ZIP
-verification, extraction, replacement, and relaunch: build `1` terminated and
-build `2` started at the same installed app path with a different process ID.
-The recorded run was `sparkle-upgrade-b95a7d5c-c2f8-4ad5-9ce1-5d1318f1465c`;
-its `result.json` records both loopback requests, old/new PIDs, installed bundle
-version, and lifecycle events. This is an **ad-hoc signed fixture** test. It does
-not verify a notarized Developer ID production application update, the actual
-Parachute UI's update interaction, or Intel installation/relaunch. CI results
-for each architecture provide separate evidence and must not be inferred from
-this local result. The service's production HTTPS configuration and preview
-isolation are covered independently by `UpdaterConfigurationTests.swift`.
-
-Historical signed-package and fixture results came from an earlier source revision and release design that also used version 1.0.0. Those superseded candidate results are preparation evidence only; that candidate was not a production release. They do not establish that the current 1.0.0 packages or a signed 1.0.0-to-higher-build update have passed. Record results for the exact new artifact hashes before publication.
-
-Electron-to-native migration remains a separate, still-unverified complete end-to-end test and must not use the public update service during validation. Before native publication, verify the untouched published Electron app through download, approval, replacement and relaunch, as well as the signed native Sparkle upgrade separately.
+The fixture records old/new process IDs, installed build and lifecycle events to establish download, replacement and relaunch at the same path. It uses ad-hoc signatures and a custom user driver, so it does not verify a notarized Developer ID app upgrade or the shipping UI's update interaction. `UpdaterConfigurationTests.swift` independently covers production HTTPS settings and preview isolation. Record results for each architecture and exact tested artifact; the [remaining publication gates](../release/README.md#validation-boundaries) still apply.
 
 Primary references: [programmatic setup](https://sparkle-project.org/documentation/programmatic-setup/),
 [publishing updates](https://sparkle-project.org/documentation/publishing/),

@@ -1,94 +1,52 @@
 # Native macOS application
 
-Parachute 1.0.0 uses SwiftUI, Apple MapKit and Sparkle 2. This branch contains the native macOS application; Electron source and build tooling are removed. A separate PR and published Electron 0.3.9 release provide the compatibility bridge before 1.0.0 can ship. The release workflow prepares signed artifacts for review; publication remains explicit.
+Parachute 1.0.0 uses SwiftUI, Apple MapKit and Sparkle 2, with macOS 14 as its deployment target. This source tree contains the native application and its tooling. The merged Electron 0.3.9 transition implementation must be published before native 1.0.0; see the [release procedure](release/README.md).
 
 ## Build and run
 
-Release builds require macOS 26 with Xcode 26.2 or later for layered icon compilation, plus Go 1.24.4. The application itself runs on macOS 14 or later. Command Line Tools previews use the static icon fallback. The shared `native/release/build-go-ios.sh` helper can fetch the locked dependencies on a fresh machine and reuses a verified local build cache. No Electron checkout or previous `bin/ios` is required.
+Release builds require macOS 26 with Xcode 26.2 or later for layered icon compilation, plus Go 1.24.4. The application itself runs on macOS 14 or later. Local builds with only Command Line Tools use the static icon fallback.
 
 ```sh
 bash native/release/build-go-ios.sh "$(uname -m)" "$PWD/native/build/ios-native"
 NATIVE_GO_IOS_BINARY="$PWD/native/build/ios-native" bash native/build.sh
-open 'native/build/Parachute.app'
+open native/build/Parachute.app
 ```
 
-The output directory can be passed as the first argument. The native build uses a pinned go-ios variant with one acknowledgement log added after the device accepts a location request. Source and dependency versions are not upgraded. See [the patch and reproducible local build](go-ios/README.md). The bundled executable is verified against that build; its provenance is included in `ios-build-info.txt`. The app is ad-hoc signed for local use, not Developer ID signed or notarized.
+`native/build.sh` accepts an output `.app` path as its first argument. Without `NATIVE_GO_IOS_BINARY`, it invokes the same pinned helper builder and cache directly. The helper adds one acknowledgement after the device accepts a location request; it does not upgrade go-ios source or dependencies. Its provenance is bundled in `ios-build-info.txt`; see [the build contract](go-ios/README.md).
 
-On this development machine, the macOS 27 beta Command Line Tools SDK lacks the SwiftUI macro plugin. Use the already-installed stable SDK:
+Local builds are ad-hoc signed and use the separate identifier `li.haorui.Parachute.NativePrototype`, with Sparkle disabled. They do not replace the installed production application or migrate its preferences. Launch with `--preview` to suppress device polling as well:
 
 ```sh
-NATIVE_SDK_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk bash native/build.sh
-NATIVE_SDK_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk bash native/test.sh
+native/build/Parachute.app/Contents/MacOS/Parachute --preview
 ```
-
-The default local preview uses the separate bundle identifier `li.haorui.Parachute.NativePrototype`. It does not replace an installed Electron app, migrate its preferences, or participate in its automatic updates.
 
 ## Interface
 
-- Full-window MapKit map with a persistent floating device panel in the lower-left corner, native window buttons and sheets; system light/dark appearance. The panel fits its content and scrolls only when the available height is insufficient. No title toolbar or collapsing sidebar.
-- Floating panels use native Liquid Glass on macOS 26 and later, with thin material on earlier systems and an opaque accessible fallback when Reduce Transparency is enabled. Nested opaque form backgrounds have been removed.
-- Hovering over the top window-control row reveals a translucent native material strip. Its height follows the actual traffic-light diameter plus twice the gap from the window's top edge (32pt on the development machine). Dragging its center moves the window; native buttons retain their click targets. Below the strip, dragging pans the map.
-- Map selection and marker with native drag/double-click navigation. The upper-right button switches between flat standard mapping and realistic satellite imagery while keeping the same overhead camera, without automatically tilting it.
-- Native address/place search in the upper-left uses Apple MapKit suggestions and the visible map region. Its native search field retains editing, magnifier and clear controls inside one glass surface, without an inset bezel or focus ring. Select a suggestion or result to update the marker, coordinates and camera. Enter automatically selects a single matching address; multiple matches remain selectable. Search cancels outdated requests and never simulates a device location by itself.
-- A successful location-command acknowledgement emits four green rings from that request's coordinate for 2.8 seconds. They use native geographic overlays below annotations, so the red marker and its label stay in front. Later selections cannot move an earlier pulse. Reduce Motion uses a brief stationary ring; animation neither intercepts map gestures nor continues indefinitely.
-- Longitude and latitude on one row; pencil opens a native editing sheet. Editing preserves full precision; the sidebar displays five decimal places.
-- Finite decimal coordinates including zero and negative values; longitude ±180 and latitude ±90. Empty, malformed and out-of-range inputs are rejected. Decimal commas are rejected to avoid ambiguity.
-- Native English, Simplified Chinese and Traditional Chinese resources. macOS system/per-app language preferences select the language on launch. There is no custom language switch or preference store.
-- No current-location lookup or permission request. Coordinates come only from map selection or manual entry.
-
-macOS 14 is the deployment target because the application uses modern SwiftUI MapKit APIs. Liquid Glass is available on macOS 26 and later; earlier supported systems use native material. Electron users on macOS 10.15–13 remain on the compatible bridge version. See [the migration design](migration/README.md) for update routing and validation boundaries.
+- Full-window MapKit map, a floating device panel and native editing sheets. Panels use Liquid Glass on macOS 26, native material on earlier systems, and an opaque fallback with Reduce Transparency. The device panel scrolls when needed; the window-control strip supports dragging.
+- Standard and satellite maps preserve the overhead camera. Address search uses native MapKit suggestions and the visible map region. Selection updates the marker, coordinates and camera without simulating a device location. Search cancels stale requests and preserves native IME composition and candidate confirmation.
+- Longitude and latitude share one row; the pencil opens an editor preserving full precision. Finite decimal values, zero and negatives are accepted within longitude ±180 and latitude ±90. Empty, malformed and out-of-range values, including ambiguous decimal commas, are rejected.
+- A successful command acknowledgement emits four finite green rings at that request's coordinate, behind the marker. Reduce Motion uses a brief stationary ring. An acknowledgement does not independently verify the phone's reported location.
+- Native English, Simplified Chinese and Traditional Chinese resources follow macOS system/per-app language and appearance settings. There is no custom language preference store or current-location permission request.
 
 ## Device controls and boundaries
 
-The app polls go-ios for devices reported by usbmuxd as `USB` or `Network`, then reads pairing / Developer Mode status. Entries are deduplicated by UDID with USB preferred for the same device. A new selection prefers USB; an existing selection stays on the same reachable UDID across discovery reordering or USB-to-network fallback. The UI reports the discovered transport; go-ios chooses its underlying transport internally by UDID. Device-changing commands run only after a user clicks the relevant control. Calls use `Process` argument arrays, with timeouts, cancellation and cleanup limited to owned subprocesses.
+The app discovers devices reported by usbmuxd as USB or Network, deduplicates by UDID with USB preferred, and preserves a reachable selection across transport changes. It reads pairing and Developer Mode status; `ready` describes that status check, not successful location simulation. Device-changing actions require a user click and use `Process` argument arrays with bounded execution and cleanup of owned subprocesses.
 
-Read-only checks on this development machine verified that its network-only iPhone is discoverable and that device-name and Developer Mode queries succeed. `ready` means the Developer Mode query succeeded; it does not establish that network tunnel setup or location simulation will succeed. The inspected fork source has no USB-only filter in the userspace tunnel path, but end-to-end network location simulation has not been tested.
+Simulation reuses a ready external tunnel or starts an owned userspace tunnel on a private loopback port. It never installs privileged helpers, prompts for administrator access, changes sudoers or pauses `remoted`. The pinned helper's userspace mode requires iOS later than 17.4; older iOS 17 devices need an existing compatible tunnel, while pre-iOS 17 uses the legacy USB service. Owned processes stop on disconnect and exit.
 
-On Simulate, the app reuses a ready external tunnel or starts its own `go-ios tunnel start --userspace` process on a private loopback port and waits for the selected device. Startup is bounded; failure is reported with retained diagnostics. It stops only owned processes, including on disconnect and exit, and never prompts for administrator access, installs helpers, writes sudoers or pauses `remoted`. The current binary's userspace mode requires iOS later than 17.4; older iOS 17 devices need an existing compatible tunnel, while pre-iOS 17 uses the legacy USB service. A live location command is explicitly distinguished from verification of the phone's reported location.
-
-The unchanged local binary was tested starting an isolated userspace tunnel and returning a ready device tunnel; it was stopped afterward. This live check did not run `setlocation` or change the phone's location.
-
-The existing connection and Developer Mode guide images are preserved byte-for-byte in `native/Resources/Help/` and bundled as native resources. Connection instructions are hidden when a trusted device is connected.
-
-Failed action details are retained in `last-action-failure.log`; the rolling `diagnostic.log` is capped at 256 KiB. Both live in the application runtime directory. The UI exposes failure details and a Finder shortcut. Logs redact device identifiers and coordinate values. Prior builds deleted temporary command output, so earlier failed simulations may not be recoverable.
-
-Production runtime files live in `~/Library/Application Support/Parachute/go-ios-runtime`; local previews use the separate `ParachuteNativePrototype/go-ios-runtime` directory. No pairing identity is copied from Electron. Device commands still require a usable pairing/trust relationship; verify this with a physical device before production use.
-
-Historical helper inspection and retained native source baseline:
-
-- The previous Electron build configuration referenced `Harrilee/go-ios` ref `v1.0.204`; the native builder pins the inspected commit from that ref.
-- The inspected original local executable identified itself as `local-build`; its exact source commit was not embedded. Do not claim commit provenance from the ref alone.
-- SHA-256: `0d5d80df01f77b9c0532d6e95530ed07f7915159b0d363089038798ce8c80798` (arm64).
-- The original binary is a historical comparison baseline, not a build input retained on this branch. Its embedded dependency records are checked in as `native/release/go-ios-dependencies.txt`. The native app bundles a separately built acknowledgement variant from the pinned source, without upgrading dependencies. The Electron 0.3.9 PR retains its own published-binary provisioning. See `go-ios/README.md` for the provenance distinction.
+Connection and Developer Mode guide images are preserved in `native/Resources/Help/`. Failure details are retained in `last-action-failure.log`; `diagnostic.log` is limited to 256 KiB. Logs redact device identifiers and coordinates. Production runtime files live in `~/Library/Application Support/Parachute/go-ios-runtime`; previews use `ParachuteNativePrototype/go-ios-runtime`. Pairing identities are not copied from Electron.
 
 ## Verification
 
-`native/test.sh` runs coordinate edge cases, fake-executable device service/tunnel/acknowledgement checks, MapKit search cancellation and stale-result tests, and native language/resource selection in a temporary bundle. Language tests also verify the bundle declares no location permission keys. It does not send device-changing commands or modify system language preferences.
+`bash native/test.sh` covers coordinate boundaries, fake-device discovery/tunnel/acknowledgement behavior, search cancellation, native language selection and updater configuration. `NATIVE_TEST_SPARKLE=1` also runs signed appcast fixtures. These tests do not change device locations or system language preferences.
 
-`python3 native/Tests/ReleaseToolsTests.py` separately checks packaging-process cleanup, bounded ticket retries, fixed-destination package metadata and bridge-source provenance. It exercises `native/release/process.py` and the component packaging entry point in `native/release/package.sh` using local fixtures, without installing a package or contacting Apple notarization. The release guide describes actual signing, notarization and installation checks.
+`bash native/test-input.sh` exercises the actual AppKit field editor and marked text in a temporary window using fake search responses. It simulates candidate confirmation without changing the system input source; it does not automate the operating system's candidate chooser.
 
-Live Apple MapKit queries verified both an `Apple Park` completion and a single result for `1 Apple Park Way, Cupertino, CA`. Successful-command acknowledgement handling is tested with fake executables; the instrumented binary has not been used to set a real phone's location during automated validation.
-
-Search keeps IME marked text inside the native editor until candidate confirmation. Unrelated SwiftUI refreshes cannot overwrite a composition, and confirming a candidate does not also submit a search. Old results and deferred focus changes are rejected while a new composition is in progress.
-
-`NATIVE_SDK_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk bash native/test-input.sh` runs the opt-in input regression checks in a temporary GUI window. They exercise the actual AppKit field editor, marked ranges and queued keyboard events with fake search responses; they neither change the system input source nor contact devices or Apple search servers. Candidate confirmation is simulated, not an automated test of the operating system's candidate chooser.
-
-The optional `NATIVE_QA=1` build includes internal view snapshot helpers:
-
-```sh
-NATIVE_QA=1 bash native/build.sh
-'native/build/Parachute.app/Contents/MacOS/Parachute' \
-  --preview --selected --snapshot /tmp/native-en.png -AppleLanguages '(en)'
-```
-
-An isolated map-only harness measured the previous `.onTapGesture` delay at approximately 502 ms after mouse-up. A simultaneous zero-distance drag completion, filtered to reject actual drags, removes the double-click arbitration wait (approximately 0.4–1.6 ms to the selection callback in the harness). Drag and double-click zoom were checked separately. These timings are callback latency, not a guarantee of tile-rendering time.
-
-`--preview` suppresses device polling. QA snapshots can add `--small` or `--edit`. Normal builds exclude screenshot helpers and fixture UI state.
+`python3 native/Tests/ReleaseToolsTests.py` covers process cleanup, ticket retries, package metadata and bridge provenance using local fixtures. See [release validation](release/README.md), [migration validation](migration/README.md), and [Sparkle validation](updater/README.md) for signing, installation and upgrade checks. Record validation against the exact source commit and artifact hashes.
 
 ## Deferred
 
-- Compatibility / migration of older privileged tunnel setups.
-- True on-device location simulation and disconnect/reconnect validation, including network-only tunnel setup and simulation.
-- See [release validation](release/README.md), [migration validation](migration/README.md), and [Sparkle validation](updater/README.md) for the exact signing, install and update checks and their remaining limits.
+- True on-device location simulation and disconnect/reconnect validation, including network-only operation and compatibility with older privileged tunnels.
+- The untouched published Electron application's complete download/approval/replacement/relaunch flow, older-macOS execution and production-signed native Sparkle upgrades.
 
-Local preview builds never initialize Sparkle. Production builds retain `com.electron.parachute`, use architecture-specific HTTPS feeds and signed updates, and include a small new AppKit relaunch helper required by the old updater. That helper has no Electron dependency. The initial native version is 1.0.0 with build number 1000000. Historical candidate results also used the 1.0.0 version number, but came from an earlier source revision and release design. They are superseded preparation evidence, not a published release or verification of the current 1.0.0 artifacts. Do not route production users to 1.0.0 until published 0.3.9 and the explicit migration/release checks are in place.
+These remain publication gates. Native 1.0.0 uses build number 1000000 and retains `com.electron.parachute`, the publisher identity and a small native relaunch compatibility helper. Preparing local or CI artifacts does not publish a release or activate its feeds.

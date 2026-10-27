@@ -4,7 +4,7 @@ import Combine
 import Sparkle
 #endif
 
-/// Update configuration is explicit in the signed bundle. Preview/QA builds never
+/// Update configuration is explicit in the signed bundle. Preview builds never
 /// initialize Sparkle, so opening a local sample cannot contact the production feed.
 struct UpdaterConfiguration {
     let feedURL: URL
@@ -12,7 +12,7 @@ struct UpdaterConfiguration {
 
     static func load(from bundle: Bundle = .main,
                      arguments: [String] = ProcessInfo.processInfo.arguments) -> UpdaterConfiguration? {
-        #if LOCAL_PREVIEW || LOCAL_QA
+        #if LOCAL_PREVIEW
         return nil
         #else
         guard !arguments.contains("--preview"),

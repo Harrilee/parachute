@@ -22,7 +22,7 @@ struct UpdaterConfigurationTests {
             return Bundle(url: folder)!
         }
         let bundle = try fixture(valid)
-        #if LOCAL_PREVIEW || LOCAL_QA
+        #if LOCAL_PREVIEW
         precondition(UpdaterConfiguration.load(from: bundle, arguments: []) == nil)
         #else
         precondition(UpdaterConfiguration.load(from: bundle, arguments: [])?.feedURL.absoluteString == valid["SUFeedURL"] as? String)
