@@ -34,8 +34,10 @@ with open(sys.argv[1], 'wb') as output:
     plistlib.dump({'os': [sys.argv[2]], 'arch': [sys.argv[3]], 'home': False}, output)
 PY
 echo "Building signed bridge installer ($ASSET_ARCH, macOS $MINIMUM_OS+)"
+python3 "$SCRIPT_DIR/run-bounded.py" --timeout 120 --log "$OUTPUT_PKG-component.log" -- \
+    bash "$SCRIPT_DIR/build-component.sh" "$APP_PATH" "$STAGING_DIR/payload.pkg" com.electron.parachute 0.3.9
 python3 "$SCRIPT_DIR/run-bounded.py" --timeout 600 --log "$OUTPUT_PKG-build.log" -- \
-    /usr/bin/productbuild --component "$APP_PATH" /Applications \
+    /usr/bin/productbuild --package "$STAGING_DIR/payload.pkg" \
     --product "$STAGING_DIR/requirements.plist" \
     --identifier com.electron.parachute.installer --version 0.3.9 \
     --sign "$APPLE_INSTALLER_SIGN_ID" --keychain "$KEYCHAIN_PATH" "$OUTPUT_PKG"

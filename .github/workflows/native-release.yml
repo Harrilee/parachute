@@ -107,6 +107,7 @@ jobs:
         run: |
           python3 native/release/test-run-bounded.py
           python3 native/release/test-stapler-retry.py
+          python3 native/release/test-component-package.py
           NATIVE_TEST_SPARKLE=1 bash native/test.sh
       - name: Exercise actual Sparkle install and relaunch in an isolated fixture
         run: |
@@ -303,7 +304,7 @@ jobs:
         run: bash native/release/probe-installer.sh create
       - name: Verify installer key access (60 second limit)
         run: bash native/release/probe-installer.sh sign
-      - name: Build, sign and notarize bridge app
+      - name: Build and sign bridge app
         env:
           DEBUG: electron-osx-sign*
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -312,7 +313,7 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/bridge"
           npm run make -- --arch="$ASSET_ARCH" --targets=@electron-forge/maker-zip
-      - name: Verify signed and notarized bridge ZIP
+      - name: Notarize bridge app and verify stapled ZIP
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash native/release/finish-bridge.sh "$RUNNER_TEMP/bridge/out/make" "$RUNNER_TEMP/bridge-artifacts" prepare

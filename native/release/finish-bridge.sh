@@ -30,8 +30,14 @@ mkdir -p "$OUTPUT_DIR/.bridge-payload"
 ditto -x -k "$ZIP" "$OUTPUT_DIR/.bridge-payload"
 codesign --verify --deep --strict "$APP_PATH"
 codesign --verify --test-requirement "=anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"com.electron.parachute\"" "$APP_PATH"
+bash "$SCRIPT_DIR/notarize.sh" "$ZIP" "$OUTPUT_DIR/bridge-app-notarization"
+python3 "$SCRIPT_DIR/stapler-retry.py" staple "$APP_PATH"
 python3 "$SCRIPT_DIR/stapler-retry.py" validate "$APP_PATH"
 spctl --assess --type execute --verbose=2 "$APP_PATH"
+# Forge signs the staged app; shared release tooling handles notarization and
+# bounded ticket-server retries. Rebuild the ZIP only after its app is stapled.
+ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$OUTPUT_DIR/.bridge-stapled.zip"
+mv "$OUTPUT_DIR/.bridge-stapled.zip" "$ZIP"
 /usr/bin/lipo "$APP_PATH/Contents/MacOS/Parachute" -verify_arch "$MACH_ARCH"
 /usr/bin/lipo "$APP_PATH/Contents/Resources/ios" -verify_arch "$MACH_ARCH"
 python3 - "$APP_PATH/Contents/Info.plist" <<'PY'
@@ -54,7 +60,7 @@ pkgutil --check-signature "$PKG"
 spctl --assess --type install --verbose=2 "$PKG"
 if [ "${CI_INSTALL_TEST:-0}" = 1 ]; then
     [ "${GITHUB_ACTIONS:-}" = true ] || { echo 'Install test requires GitHub Actions.' >&2; exit 1; }
-    sudo installer -pkg "$PKG" -target /
+    sudo installer -verboseR -pkg "$PKG" -target / | tee "$OUTPUT_DIR/bridge-pkg-install.log"
     cmp "$APP_PATH/Contents/Info.plist" /Applications/Parachute.app/Contents/Info.plist
     codesign --verify --deep --strict /Applications/Parachute.app
     spctl --assess --type execute --verbose=2 /Applications/Parachute.app

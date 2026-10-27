@@ -32,7 +32,7 @@ python3 "$SCRIPT_DIR/stapler-retry.py" validate "$OUTPUT_DIR/$STEM.pkg"
 # Do not launch the app here: installation/signing checks require no device.
 if [ "${CI_INSTALL_TEST:-0}" = 1 ]; then
     [ "${GITHUB_ACTIONS:-}" = true ] || { echo 'Install test requires GitHub Actions.' >&2; exit 1; }
-    sudo installer -pkg "$OUTPUT_DIR/$STEM.pkg" -target /
+    sudo installer -verboseR -pkg "$OUTPUT_DIR/$STEM.pkg" -target / | tee "$OUTPUT_DIR/pkg-install.log"
     cmp "$APP_PATH/Contents/Info.plist" /Applications/Parachute.app/Contents/Info.plist
     codesign --verify --deep --strict /Applications/Parachute.app
     spctl --assess --type execute --verbose=2 /Applications/Parachute.app

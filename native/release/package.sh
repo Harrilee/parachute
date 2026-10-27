@@ -53,8 +53,10 @@ import plistlib, sys
 with open(sys.argv[1], 'wb') as file:
     plistlib.dump({'os': ['14.0'], 'arch': [sys.argv[2]], 'home': False}, file)
 PY
+python3 "$SCRIPT_DIR/run-bounded.py" --timeout 120 --log "$OUTPUT_DIR/pkg-component.log" -- \
+    bash "$SCRIPT_DIR/build-component.sh" "$APP_PATH" "$STAGING_DIR/payload.pkg" "$BUNDLE_ID" "$RELEASE_VERSION"
 python3 "$SCRIPT_DIR/run-bounded.py" --timeout 600 --log "$OUTPUT_DIR/pkg-build.log" -- \
-    productbuild --component "$APP_PATH" /Applications --product "$STAGING_DIR/requirements.plist" \
+    productbuild --package "$STAGING_DIR/payload.pkg" --product "$STAGING_DIR/requirements.plist" \
     --identifier "$BUNDLE_ID.installer" --version "$RELEASE_VERSION" \
     --sign "$APPLE_INSTALLER_SIGN_ID" --keychain "$KEYCHAIN_PATH" "$OUTPUT_DIR/$STEM.pkg"
 fi

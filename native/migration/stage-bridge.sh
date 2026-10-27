@@ -44,6 +44,9 @@ cat >> "$STAGE/forge.config.js" <<'JS'
 // CI uses the identities already validated by the shared signing setup.
 module.exports.packagerConfig.osxSign.identity = process.env.APPLE_SIGN_ID
 module.exports.packagerConfig.osxSign.keychain = process.env.KEYCHAIN_PATH
+// finish-bridge.sh notarizes, retries stapling, and recreates the final ZIP.
+// Forge's internal stapler has no retry for transient CloudKit failures.
+delete module.exports.packagerConfig.osxNotarize
 delete module.exports.packagerConfig.extendInfo.NSLocationWhenInUseUsageDescription
 delete module.exports.packagerConfig.extendInfo.NSLocationUsageDescription
 const installer = module.exports.makers.find(maker => maker.name === '@electron-forge/maker-pkg')

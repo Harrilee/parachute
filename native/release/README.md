@@ -26,8 +26,9 @@ Each architecture produces:
 
 For the initial `1.0.0` transition only, parallel jobs stage the Electron `0.3.9`
 bridge with its frozen npm lock and the exact architecture-specific go-ios from
-the published `0.3.8` artifact. They build and notarize the bridge ZIP using
-Electron Forge, build a signed PKG directly with `productbuild`, then
+the published `0.3.8` artifact. Electron Forge builds and signs the bridge app;
+shared release scripts notarize it and recreate the ZIP after stapling. They
+build a signed PKG with `pkgbuild` and `productbuild`, then
 notarize/staple it and validate installation. Bridge ZIPs retain
 the old `Parachute-darwin-{arm64,x64}-0.3.9.zip` naming. The main Electron package
 version and source checkout are not overwritten by bridge staging. Later native
@@ -70,6 +71,10 @@ Its optional third argument selects `sign`, `notarize-app`, `build-pkg`, or
 `notarize-pkg`; omitting it runs all phases. CI uses separate steps so API-visible
 job status distinguishes signing, Apple notarization, and installer construction.
 Bridge packaging similarly exposes `prepare`, `build-pkg`, and `notarize-pkg`.
+Both installers explicitly disable bundle relocation in their component metadata
+and install into `/Applications`. This prevents Installer from selecting a
+matching app in Downloads or a temporary build directory. An unsigned fixture
+test inspects the generated package metadata and payload without installing it.
 
 Signing and `productbuild` run under a 10-minute process timeout. A timeout logs
 only the owned process group's names/state (not arguments or environment), then
@@ -139,7 +144,7 @@ Both jobs retain their evidence as Actions artifacts.
 1. Merge the reviewed PR, select the exact release commit, and dispatch `release.yml` for that commit with version `1.0.0` and build `1000000`. Require both native and both bridge jobs to pass. Complete the isolated signed migration test described in `native/migration/README.md` before exposing the release to legacy users.
 2. Download the four artifact bundles from that run into a clean directory. Verify their SHA-256 manifests, source commit, architectures, minimum OS, notarization results and PKG installation evidence. Keep the generated signed appcasts byte-for-byte unchanged. The unsigned fixture update tests are separate evidence, not a substitute for checking the production packages.
 3. Create `v1.0.0` at the tested commit and a **draft** GitHub Release. Upload both native ZIPs and PKGs, both bridge ZIPs, and the checksums. Bridge PKGs are for compatibility testing/rollback; do not present them as the recommended 1.0 installer. Write English release notes that identify macOS 14 as the native minimum. These are explicit maintainer actions; no workflow performs them.
-4. Publish the complete release after all assets are present. Then copy the two generated `electron-migration-*.json` and the two signed `appcast-*.xml` artifacts into `updates/` on `main` in a reviewed commit. Do not regenerate or edit a signed XML feed. Asset URLs must be live before the feed commit; bridge checks during the short transition fall back to the existing UI and retry on the next launch.
+4. After all reviewed assets are present, first make the release available as a **prerelease**, which the legacy public update service ignores. Verify the asset URLs, then copy the two generated `electron-migration-*.json` and the two signed `appcast-*.xml` artifacts into `updates/` on `main` in a reviewed commit. Do not regenerate or edit a signed XML feed. Verify all feeds are reachable, then promote the same release to stable/latest. This keeps the bridge out of the old update feed until its native destination and manifests are ready.
 5. Verify the public legacy feed selects a bridge ZIP for both architectures, and check all four published feed URLs and their downloads. Keep the 1.0.0 native ZIPs, pinned migration JSON and the bridge ZIPs permanently available for skipped-version upgrades.
 
 For future native releases, increase both the marketing version and numeric build, generate new Sparkle appcasts, and retain the original bridge ZIPs on the latest Release. Do not advance the Electron migration feed to a future build with a higher system requirement.
