@@ -1,130 +1,30 @@
-name: Build & Release macOS
+name: Prepare macOS release
 
+# Replaces automatic tag publication. Artifacts and update feeds are reviewed
+# before the explicit promotion described in native/release/README.md.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: Native marketing version
+        required: true
+        default: '1.0.0'
+        type: string
+      build_number:
+        description: Monotonically increasing native build number
+        required: true
+        default: '1000000'
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        arch: [arm64, x64]
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Cross-compile go-ios for target arch
-        run: |
-          case "${{ matrix.arch }}" in
-            arm64) GOARCH="arm64" ;;
-            x64)   GOARCH="amd64" ;;
-          esac
-          FORCE_REBUILD=1 GOOS=darwin GOARCH="$GOARCH" CGO_ENABLED=0 \
-            bash scripts/download-go-ios.sh
-
-      - name: Import signing certificates
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
-          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
-        run: |
-          APPLICATION_CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          INSTALLER_CERTIFICATE_PATH=$RUNNER_TEMP/installer_certificate.p12
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-
-          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $APPLICATION_CERTIFICATE_PATH
-          echo -n "$APPLE_INSTALLER_CERTIFICATE" | base64 --decode -o $INSTALLER_CERTIFICATE_PATH
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          security import $APPLICATION_CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security import $INSTALLER_CERTIFICATE_PATH -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security set-key-partition-list -S apple-tool:,apple: \
-            -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security list-keychains -d user -s $KEYCHAIN_PATH login.keychain
-
-      - name: Build macOS app
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          KEYCHAIN_PATH: ${{ runner.temp }}/app-signing.keychain-db
-        run: npm run make -- --arch=${{ matrix.arch }}
-
-      - name: Notarize and staple pkg
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          PKG_COUNT=$(find out/make -name '*.pkg' -type f | wc -l | tr -d ' ')
-          if [ "$PKG_COUNT" = "0" ]; then
-            echo "No pkg files found to notarize"
-            exit 1
-          fi
-
-          find out/make -name '*.pkg' -type f -print0 | while IFS= read -r -d '' pkg; do
-            echo "Notarizing $pkg"
-            xcrun notarytool submit "$pkg" \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID" \
-              --wait
-
-            echo "Stapling $pkg"
-            xcrun stapler staple "$pkg"
-          done
-
-      - name: Cleanup keychain
-        if: always()
-        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: parachute-macos-${{ matrix.arch }}
-          path: |
-            out/make/**/*.zip
-            out/make/**/*.pkg
-
-  publish-release:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: parachute-macos-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release-assets/**/*.zip
-            release-assets/**/*.pkg
+  prepare:
+    uses: ./.github/workflows/native-release.yml
+    with:
+      version: ${{ inputs.version }}
+      build_number: ${{ inputs.build_number }}
+      bundle_id: com.electron.parachute
+      feed_base_url: https://raw.githubusercontent.com/Harrilee/parachute/main/updates
+    secrets: inherit

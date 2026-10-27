@@ -1,0 +1,11 @@
+diff --git a/main.go b/main.go
+--- a/main.go
++++ b/main.go
+@@ -2503,6 +2503,7 @@ func startLocationSimulation(service *instruments.LocationSimulationService, lat s
+ 
+ 	err = service.StartSimulateLocation(latitude, longitude)
+ 	exitIfError("location simulation failed to start with", err)
++	log.WithField("event", "location-simulation-started").Info("Location simulation started")
+ 
+ 	defer stopLocationSimulation(service)
+ 	c := make(chan os.Signal, 1)

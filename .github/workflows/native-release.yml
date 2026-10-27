@@ -1,0 +1,229 @@
+name: Native macOS release artifacts
+
+# Preparing artifacts never creates a tag, release, or public update feed.
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        default: '1.0.0'
+        type: string
+      build_number:
+        required: true
+        default: '1000000'
+        type: string
+      bundle_id:
+        required: true
+        default: com.electron.parachute
+        type: string
+      feed_base_url:
+        required: true
+        default: https://raw.githubusercontent.com/Harrilee/parachute/main/updates
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Native marketing version
+        required: true
+        default: '1.0.0'
+        type: string
+      build_number:
+        description: Monotonically increasing native build number
+        required: true
+        default: '1000000'
+        type: string
+      bundle_id:
+        description: Bundle identity verified from the published Electron app
+        required: true
+        default: com.electron.parachute
+        type: string
+      feed_base_url:
+        description: Stable HTTPS directory for the reviewed architecture-specific appcasts
+        required: true
+        default: https://raw.githubusercontent.com/Harrilee/parachute/main/updates
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: Native ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            asset_arch: arm64
+            runner: macos-15
+          - arch: x86_64
+            asset_arch: x64
+            runner: macos-15-intel
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+      BUNDLE_ID: ${{ inputs.bundle_id }}
+      RELEASE_ARCH: ${{ matrix.arch }}
+      ASSET_ARCH: ${{ matrix.asset_arch }}
+      FEED_BASE_URL: ${{ inputs.feed_base_url }}
+      RELEASE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.2'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.4'
+          cache: false
+      - name: Validate release inputs and runner
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlparse
+          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', os.environ['RELEASE_VERSION'])
+          assert re.fullmatch(r'[1-9][0-9]*', os.environ['BUILD_NUMBER'])
+          assert re.fullmatch(r'[A-Za-z0-9.-]+', os.environ['BUNDLE_ID'])
+          assert os.environ['BUNDLE_ID'] == 'com.electron.parachute'
+          url = urlparse(os.environ['FEED_BASE_URL'])
+          assert url.scheme == 'https' and url.netloc and not url.query and not url.fragment
+          PY
+          test "$(uname -m)" = "$RELEASE_ARCH"
+          xcodebuild -version
+      - name: Build pinned go-ios with success acknowledgement
+        run: bash native/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
+      - name: Native tests
+        run: NATIVE_TEST_SPARKLE=1 bash native/test.sh
+      - name: Fetch verified Sparkle framework
+        run: |
+          SPARKLE_ROOT="$(bash native/updater/fetch-sparkle.sh)"
+          printf 'SPARKLE_ROOT=%s\nSPARKLE_FRAMEWORK_PATH=%s/Sparkle.framework\n' "$SPARKLE_ROOT" "$SPARKLE_ROOT" >> "$GITHUB_ENV"
+      - name: Build release app
+        env:
+          NATIVE_RELEASE: '1'
+          NATIVE_ARCH: ${{ matrix.arch }}
+          NATIVE_GO_IOS_BINARY: ${{ runner.temp }}/ios-native
+          NATIVE_GO_IOS_BUILD_INFO: ${{ runner.temp }}/ios-native.build-info.txt
+        run: |
+          export SPARKLE_FEED_URL="${FEED_BASE_URL%/}/appcast-$ASSET_ARCH.xml"
+          export SPARKLE_PUBLIC_KEY="$(cat native/updater/public-key.txt)"
+          bash native/build.sh "$RUNNER_TEMP/Parachute.app"
+          bash native/migration/build-launcher.sh "$RUNNER_TEMP/Parachute.app" "$ASSET_ARCH"
+      - name: Import existing Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash native/release/import-signing.sh
+      - name: Sign, notarize, staple and package
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts"
+      - name: Verify ZIP and install PKG on disposable runner
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CI_INSTALL_TEST: '1'
+        run: bash native/release/verify-artifacts.sh "$RUNNER_TEMP/native-artifacts"
+      - name: Generate signed Sparkle feed for review
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | python3 native/updater/generate-appcast.py \
+            --archive "$RUNNER_TEMP/native-artifacts/Parachute-native-$ASSET_ARCH-$RELEASE_VERSION.zip" \
+            --architecture "$ASSET_ARCH" \
+            --version "$RELEASE_VERSION" --build "$BUILD_NUMBER" \
+            --download-base-url "https://github.com/Harrilee/parachute/releases/download/v$RELEASE_VERSION/" \
+            --public-key-file native/updater/public-key.txt \
+            --output "$RUNNER_TEMP/native-artifacts/appcast-$ASSET_ARCH.xml"
+      - name: Upload artifacts and notarization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-${{ matrix.asset_arch }}-${{ inputs.version }}
+          path: ${{ runner.temp }}/native-artifacts/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove ephemeral signing keychain
+        if: always()
+        run: |
+          KEYCHAIN_FILE="$RUNNER_TEMP/parachute-native-signing.keychain-db"
+          if [ -f "$KEYCHAIN_FILE" ]; then security delete-keychain "$KEYCHAIN_FILE"; fi
+
+  electron-bridge:
+    if: inputs.version == '1.0.0'
+    name: Electron migration bridge ${{ matrix.asset_arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - asset_arch: arm64
+            runner: macos-15
+          - asset_arch: x64
+            runner: macos-15-intel
+    env:
+      ASSET_ARCH: ${{ matrix.asset_arch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Stage locked Electron 0.3.9 migration bridge
+        run: |
+          bash native/migration/stage-bridge.sh "$RUNNER_TEMP/bridge"
+          bash native/migration/provision-legacy-ios.sh "$RUNNER_TEMP/bridge" "$ASSET_ARCH"
+          cd "$RUNNER_TEMP/bridge"
+          npm ci
+      - name: Import existing Apple signing and notarization credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash native/release/import-signing.sh
+      - name: Build, sign and notarize bridge app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cd "$RUNNER_TEMP/bridge"
+          npm run make -- --arch="$ASSET_ARCH"
+      - name: Notarize bridge PKG and verify artifacts and installation
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CI_INSTALL_TEST: '1'
+        run: |
+          bash native/release/finish-bridge.sh "$RUNNER_TEMP/bridge/out/make" "$RUNNER_TEMP/bridge-artifacts"
+          python3 native/migration/generate-feeds.py "$RUNNER_TEMP/bridge-artifacts"
+      - name: Upload bridge artifacts and notarization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-bridge-macos-${{ matrix.asset_arch }}-0.3.9
+          path: ${{ runner.temp }}/bridge-artifacts/*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove ephemeral signing keychain
+        if: always()
+        run: |
+          KEYCHAIN_FILE="$RUNNER_TEMP/parachute-native-signing.keychain-db"
+          if [ -f "$KEYCHAIN_FILE" ]; then security delete-keychain "$KEYCHAIN_FILE"; fi

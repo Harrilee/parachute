@@ -1,15 +1,20 @@
 /* global MAIN_WINDOW_WEBPACK_ENTRY, MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY */
 import IDeviceClient from './ideviceclient'
 
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, autoUpdater, BrowserWindow, ipcMain, session } = require('electron')
 const { updateElectronApp, UpdateSourceType } = require('update-electron-app')
+const { isNativeMigrationBridge, migrateToNative } = require('./native-migration')
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
     app.quit()
 }
 
-if (app.isPackaged) {
+const migrationBridge = isNativeMigrationBridge({
+    isPackaged: app.isPackaged, platform: process.platform, version: app.getVersion(),
+})
+
+if (app.isPackaged && !migrationBridge) {
     updateElectronApp({
         updateSource: {
             type: UpdateSourceType.ElectronPublicUpdateService,
@@ -18,7 +23,7 @@ if (app.isPackaged) {
     })
 }
 
-const client = new IDeviceClient()
+let client
 
 const createWindow = () => {
     const mainWindow = new BrowserWindow({
@@ -33,6 +38,18 @@ const createWindow = () => {
     // mainWindow.webContents.openDevTools()
 }
 app.whenReady().then(async () => {
+    if (migrationBridge) {
+        // The compatibility UI has no permission-dependent browser features.
+        // In particular, never ask for the Mac's location during migration/fallback.
+        session.defaultSession.setPermissionCheckHandler(() => false)
+        session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+    }
+    if (migrationBridge && await migrateToNative({
+        app, autoUpdater, platform: process.platform, arch: process.arch,
+        systemVersion: process.getSystemVersion(),
+    })) return
+
+    client = new IDeviceClient()
     try {
         await client.ensureAdminAccess()
     } catch (err) {
@@ -73,7 +90,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-    client.cleanup()
+    client?.cleanup()
 })
 
 async function isDeveloperModeEnabled() {
