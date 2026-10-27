@@ -1,3 +1,4 @@
+import { LanguageProvider, LanguageButton, useLanguage } from './i18n.jsx'
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AMap from './pages/AMap.jsx'
@@ -17,6 +18,7 @@ import { PHONE_CONNECTION_STATUS, LOCATION_SIMULATION_STATUS } from './utils.js'
 const root = createRoot(document.getElementById('root'))
 
 const LocateButton = ({ map }) => {
+    const { t } = useLanguage()
     const [locating, setLocating] = useState(false)
 
     const centerMap = (latitude, longitude, source) => {
@@ -76,7 +78,7 @@ const LocateButton = ({ map }) => {
     }
 
     return (
-        <button className="locate-btn" onClick={handleLocate} disabled={locating} title="回到当前位置">
+        <button className="locate-btn" onClick={handleLocate} disabled={locating} title={t('回到当前位置')} aria-label={t('回到当前位置')}>
             {locating ? (
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: 'spin 1s linear infinite' }}>
                     <circle cx="12" cy="12" r="10" strokeDasharray="32" strokeDashoffset="12" />
@@ -106,6 +108,7 @@ const App = () => {
         <>
             <ThemeProvider theme={darkTheme}>
                 <CssBaseline />
+                <LanguageButton />
                 {map === '高德地图' && (
                     <AMap longitude={longitude} latitude={latitude} setLongitude={setLongitude} setLatitude={setLatitude} setMapLoaded={setMapLoaded} />
                 )}
@@ -132,4 +135,4 @@ const App = () => {
         </>
     )
 }
-root.render(<App />)
+root.render(<LanguageProvider><App /></LanguageProvider>)
