@@ -102,7 +102,9 @@ jobs:
       - name: Build pinned go-ios with success acknowledgement
         run: bash native/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
       - name: Native tests
-        run: NATIVE_TEST_SPARKLE=1 bash native/test.sh
+        run: |
+          python3 native/release/test-run-bounded.py
+          NATIVE_TEST_SPARKLE=1 bash native/test.sh
       - name: Exercise actual Sparkle install and relaunch in an isolated fixture
         run: |
           if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
@@ -135,8 +137,14 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: bash native/release/import-signing.sh
-      - name: Sign, notarize, staple and package
-        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts"
+      - name: Sign native app and nested code
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" sign
+      - name: Notarize native app and create stapled ZIP
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-app
+      - name: Build and sign native PKG (10 minute limit)
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" build-pkg
+      - name: Notarize and staple native PKG
+        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-pkg
       - name: Verify ZIP and install PKG on disposable runner
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -176,6 +184,62 @@ jobs:
         run: |
           KEYCHAIN_FILE="$RUNNER_TEMP/parachute-native-signing.keychain-db"
           if [ -f "$KEYCHAIN_FILE" ]; then security delete-keychain "$KEYCHAIN_FILE"; fi
+
+  migration-validation:
+    if: inputs.version == '1.0.0'
+    needs: [native, electron-bridge]
+    name: Signed migration component ${{ matrix.asset_arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - asset_arch: arm64
+            runner: macos-15
+          - asset_arch: x64
+            runner: macos-15-intel
+    env:
+      ASSET_ARCH: ${{ matrix.asset_arch }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-macos-${{ matrix.asset_arch }}-${{ inputs.version }}
+          path: ${{ runner.temp }}/migration-inputs/native
+      - uses: actions/download-artifact@v4
+        with:
+          name: electron-bridge-macos-${{ matrix.asset_arch }}-0.3.9
+          path: ${{ runner.temp }}/migration-inputs/bridge
+      - name: Exercise genuine Squirrel replacement on isolated signed copies
+        run: |
+          curl --fail --location --retry 3 --proto '=https' \
+            "https://github.com/Harrilee/parachute/releases/download/v0.3.8/Parachute-darwin-$ASSET_ARCH-0.3.8.zip" \
+            -o "$RUNNER_TEMP/migration-inputs/legacy.zip"
+          python3 native/migration/test-shipit.py \
+            --legacy "$RUNNER_TEMP/migration-inputs/legacy.zip" \
+            --report-directory "$RUNNER_TEMP/migration-report" \
+            "$RUNNER_TEMP/migration-inputs/bridge/Parachute-darwin-$ASSET_ARCH-0.3.9.zip" \
+            "$RUNNER_TEMP/migration-inputs/native/Parachute-native-$ASSET_ARCH-$RELEASE_VERSION.zip"
+      - name: Verify migration launcher using harmless app fixture
+        run: |
+          if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
+            python3 native/migration/test-launcher.py > "$RUNNER_TEMP/migration-report/launcher-result.log"
+          else
+            echo '::warning::Launcher fixture skipped: runner has no GUI login session.'
+          fi
+      - name: Upload migration component evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-evidence-${{ matrix.asset_arch }}
+          path: ${{ runner.temp }}/migration-report/*
+          if-no-files-found: warn
+          retention-days: 30
 
   electron-bridge:
     if: inputs.version == '1.0.0'
@@ -220,18 +284,27 @@ jobs:
         run: bash native/release/import-signing.sh
       - name: Build, sign and notarize bridge app
         env:
+          DEBUG: electron-osx-sign*
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           cd "$RUNNER_TEMP/bridge"
-          npm run make -- --arch="$ASSET_ARCH"
-      - name: Notarize bridge PKG and verify artifacts and installation
+          npm run make -- --arch="$ASSET_ARCH" --targets=@electron-forge/maker-zip
+      - name: Verify signed and notarized bridge ZIP
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash native/release/finish-bridge.sh "$RUNNER_TEMP/bridge/out/make" "$RUNNER_TEMP/bridge-artifacts" prepare
+      - name: Build and sign bridge PKG (10 minute limit)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash native/release/finish-bridge.sh "$RUNNER_TEMP/bridge/out/make" "$RUNNER_TEMP/bridge-artifacts" build-pkg
+      - name: Notarize bridge PKG and verify installation
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CI_INSTALL_TEST: '1'
         run: |
-          bash native/release/finish-bridge.sh "$RUNNER_TEMP/bridge/out/make" "$RUNNER_TEMP/bridge-artifacts"
+          bash native/release/finish-bridge.sh "$RUNNER_TEMP/bridge/out/make" "$RUNNER_TEMP/bridge-artifacts" notarize-pkg
           python3 native/migration/generate-feeds.py "$RUNNER_TEMP/bridge-artifacts"
       - name: Upload bridge artifacts and notarization evidence
         if: always()

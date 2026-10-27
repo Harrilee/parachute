@@ -1,28 +1,33 @@
 #!/bin/bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MAKE_DIR="${1:?Usage: finish-bridge.sh staged-out-make artifact-directory}"
 OUTPUT_DIR="${2:?Artifact directory is required}"
+PHASE="${3:-all}"
+case "$PHASE" in all|prepare|build-pkg|notarize-pkg) ;; *) echo 'Unknown bridge packaging phase' >&2; exit 1;; esac
 : "${ASSET_ARCH:?arm64 or x64 is required}"
 : "${APPLE_TEAM_ID:?Expected signing team is required}"
 : "${KEYCHAIN_PATH:?Dedicated signing keychain is required}"
 : "${NOTARY_PROFILE:?Stored notarytool profile is required}"
 case "$ASSET_ARCH" in arm64) MACH_ARCH=arm64;; x64) MACH_ARCH=x86_64;; *) exit 1;; esac
 mkdir -p "$OUTPUT_DIR"
-STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/parachute-bridge-verify.XXXXXX")"
-trap 'rm -rf "$STAGING_DIR"' EXIT
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
+APP_PATH="$OUTPUT_DIR/.bridge-payload/Parachute.app"
+ZIP="$OUTPUT_DIR/Parachute-darwin-$ASSET_ARCH-0.3.9.zip"
+PKG="$OUTPUT_DIR/Parachute-0.3.9-$ASSET_ARCH.pkg"
+echo "Bridge packaging phase: $PHASE"
+if [ "$PHASE" = all ] || [ "$PHASE" = prepare ]; then
 python3 - "$MAKE_DIR" "$OUTPUT_DIR" "$ASSET_ARCH" <<'PY'
 import pathlib, shutil, sys
 source, output, arch = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
-for extension, name in [('zip', f'Parachute-darwin-{arch}-0.3.9.zip'), ('pkg', f'Parachute-0.3.9-{arch}.pkg')]:
+for extension, name in [('zip', f'Parachute-darwin-{arch}-0.3.9.zip')]:
     paths = list(source.rglob('*.' + extension))
     if len(paths) != 1:
         raise SystemExit('Expected exactly one bridge .' + extension + ' artifact')
     shutil.copy2(paths[0], output / name)
 PY
-ZIP="$OUTPUT_DIR/Parachute-darwin-$ASSET_ARCH-0.3.9.zip"
-PKG="$OUTPUT_DIR/Parachute-0.3.9-$ASSET_ARCH.pkg"
-ditto -x -k "$ZIP" "$STAGING_DIR"
-APP_PATH="$STAGING_DIR/Parachute.app"
+mkdir -p "$OUTPUT_DIR/.bridge-payload"
+ditto -x -k "$ZIP" "$OUTPUT_DIR/.bridge-payload"
 codesign --verify --deep --strict "$APP_PATH"
 codesign --verify --test-requirement "anchor apple generic and certificate leaf[subject.OU] = \"$APPLE_TEAM_ID\" and identifier \"com.electron.parachute\"" "$APP_PATH"
 xcrun stapler validate "$APP_PATH"
@@ -37,13 +42,12 @@ assert info['CFBundleShortVersionString'] == '0.3.9'
 assert int(info.get('LSMinimumSystemVersion', '10.15').split('.')[0]) < 14
 assert not any(key.startswith('NSLocation') for key in info), 'Bridge must not request current location'
 PY
-SUBMIT_EXIT=0
-xcrun notarytool submit "$PKG" --keychain "$KEYCHAIN_PATH" --keychain-profile "$NOTARY_PROFILE" \
-    --wait --timeout 30m --output-format json > "$OUTPUT_DIR/bridge-pkg-notarization.json" || SUBMIT_EXIT=$?
-SUBMISSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$OUTPUT_DIR/bridge-pkg-notarization.json")"
-STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$OUTPUT_DIR/bridge-pkg-notarization.json")"
-xcrun notarytool log "$SUBMISSION" --keychain "$KEYCHAIN_PATH" --keychain-profile "$NOTARY_PROFILE" "$OUTPUT_DIR/bridge-pkg-notarization-log.json"
-[ "$SUBMIT_EXIT" = 0 ] && [ "$STATUS" = Accepted ] || { echo "Bridge notarization failed: $STATUS" >&2; exit 1; }
+fi
+if [ "$PHASE" = all ] || [ "$PHASE" = build-pkg ]; then
+    bash "$SCRIPT_DIR/build-bridge-pkg.sh" "$APP_PATH" "$PKG"
+fi
+if [ "$PHASE" = all ] || [ "$PHASE" = notarize-pkg ]; then
+bash "$SCRIPT_DIR/notarize.sh" "$PKG" "$OUTPUT_DIR/bridge-pkg-notarization"
 xcrun stapler staple "$PKG"
 xcrun stapler validate "$PKG"
 pkgutil --check-signature "$PKG"
@@ -59,4 +63,5 @@ fi
     cd "$OUTPUT_DIR"
     shasum -a 256 "Parachute-darwin-$ASSET_ARCH-0.3.9.zip" "Parachute-0.3.9-$ASSET_ARCH.pkg" > "bridge-$ASSET_ARCH-SHA256SUMS.txt"
 )
-echo 'Bridge ZIP and notarized PKG validation passed.'
+fi
+echo "Bridge packaging phase completed: $PHASE"

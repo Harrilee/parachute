@@ -26,8 +26,9 @@ Each architecture produces:
 
 For the initial `1.0.0` transition only, parallel jobs stage the Electron `0.3.9`
 bridge with its frozen npm lock and the exact architecture-specific go-ios from
-the published `0.3.8` artifact. They build and notarize the bridge using Electron
-Forge, then notarize/staple its PKG and validate installation. Bridge ZIPs retain
+the published `0.3.8` artifact. They build and notarize the bridge ZIP using
+Electron Forge, build a signed PKG directly with `productbuild`, then
+notarize/staple it and validate installation. Bridge ZIPs retain
 the old `Parachute-darwin-{arm64,x64}-0.3.9.zip` naming. The main Electron package
 version and source checkout are not overwritten by bridge staging. Later native
 release versions skip these bridge jobs.
@@ -65,6 +66,17 @@ provenance.
 `RELEASE_VERSION`, `BUILD_NUMBER`, `BUNDLE_ID`, `SPARKLE_PUBLIC_KEY`,
 `SPARKLE_FEED_URL`, and `RELEASE_TEAM_ID`. The migration launcher is staged next.
 `package.sh <app> <output>` then signs, notarizes and packages that complete app.
+Its optional third argument selects `sign`, `notarize-app`, `build-pkg`, or
+`notarize-pkg`; omitting it runs all phases. CI uses separate steps so API-visible
+job status distinguishes signing, Apple notarization, and installer construction.
+Bridge packaging similarly exposes `prepare`, `build-pkg`, and `notarize-pkg`.
+
+Signing and `productbuild` run under a 10-minute process timeout. A timeout logs
+only the owned process group's names/state (not arguments or environment), then
+terminates only that group. The helper's tests cover success output, nonzero
+exits, child cleanup and preservation of an unrelated process. Apple notarization
+has a separate 30-minute wait limit. Submission IDs are written before waiting,
+and result/log JSON plus packaging logs are uploaded even after a job failure.
 
 `sign-app.sh` signs Sparkle inside out in the framework's documented order,
 retains any Downloader XPC entitlements, and signs the go-ios executable,
@@ -85,6 +97,9 @@ the two signing identities for `APPLE_TEAM_ID`, stores notarytool credentials
 from `APPLE_ID` / `APPLE_PASSWORD`, and deletes the keychain in an always-run
 cleanup step. Successful signing and notarization are required; the existence of
 a Secret is not treated as validation of its contents.
+The installer key retains the access policy used by the previous successful CI
+workflow so Apple's packaging helpers can sign without an interactive keychain
+prompt. This policy applies only inside the disposable signing keychain.
 
 Sparkle reads `SPARKLE_PRIVATE_KEY` through standard input. Its public counterpart
 is checked in at `native/updater/public-key.txt`. Private key material must never
@@ -99,6 +114,14 @@ and actual PKG installation require the signed CI jobs to succeed. A passing
 package job does not demonstrate old Electron upgrade/relaunch or a later
 Sparkle upgrade; those require the isolated migration/update tests described by
 the migration and updater documentation.
+
+For `1.0.0`, a dependent matrix job downloads both signed CI artifacts and the
+checksum-pinned published `0.3.8` archive, then exercises genuine Squirrel
+replacement on fresh temporary copies (`0.3.8` → bridge → native). This is a
+component test with `launchAfterInstallation=false`; it does not claim the
+complete HTTP/approval/relaunch flow. A separate harmless launcher fixture runs
+when the runner has a GUI session, with an explicit warning if unavailable.
+Both jobs retain their evidence as Actions artifacts.
 
 ## Explicit publication procedure
 

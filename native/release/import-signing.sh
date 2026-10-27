@@ -24,8 +24,12 @@ security create-keychain -p "$SIGNING_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
 security unlock-keychain -p "$SIGNING_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 security import "$CERT_DIR/application.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign -T /usr/bin/security >/dev/null
-security import "$CERT_DIR/installer.p12" -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/productbuild -T /usr/bin/productsign -T /usr/bin/security >/dev/null
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$SIGNING_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+# Match the proven legacy release setup for the installer key. Apple's package
+# signing helpers may access it through a helper process rather than the named
+# frontend. This keychain exists only on the disposable CI runner and is deleted
+# after the job; this does not change the developer's login keychain ACLs.
+security import "$CERT_DIR/installer.p12" -P "$APPLE_INSTALLER_CERTIFICATE_PASSWORD" -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -A >/dev/null
+security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$SIGNING_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
 security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
 # The identity names are public certificate metadata. Require one identity of
 # each class for the expected team; never guess from a source-code constant.

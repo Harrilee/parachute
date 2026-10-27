@@ -58,7 +58,7 @@ The old designated requirement requires the identifier above, Apple's Developer 
 
 ## Why the native app includes a compatibility launcher
 
-Electron 32.1.2 pins Squirrel.Mac at [`0e5d146ba13101a1302d59ea6e6e0b3cace4ae38`](https://github.com/electron/electron/blob/v32.1.2/DEPS). Its updater finds an application with the same bundle identifier, verifies the old designated requirement, and replaces the bundle. Its macOS 11+ relaunch path then executes **the new file at its own former ShipIt path**. A plain native ZIP can therefore replace the app but fail to reopen it.
+Electron 32.1.2 pins Squirrel.Mac at [`0e5d146ba13101a1302d59ea6e6e0b3cace4ae38`](https://github.com/electron/electron/blob/v32.1.2/DEPS), then applies [Electron-specific patches](https://github.com/electron/electron/tree/v32.1.2/patches/squirrel.mac). Its updater finds an application with the same bundle identifier, verifies the old designated requirement with strict nested-code and all-architecture validation, and replaces the bundle. Its patched macOS 11+ relaunch path uses `posix_spawn` to execute **the new file at its own former ShipIt path**. A plain native ZIP can therefore replace the app but fail to reopen it.
 
 `build-launcher.sh` supplies that exact path:
 
@@ -75,7 +75,7 @@ bash native/migration/build-launcher.sh PATH_TO_APP arm64
 # Use x64 for the Intel package.
 ```
 
-Sign the complete `Squirrel.framework` with the same Developer ID identity before signing the outer app. Its `Resources/ShipIt` path resolves to the framework executable; signing only the outer app is insufficient. The framework layout, strict nested ad-hoc signing, and rejection of an unrelated target have been checked locally. Developer ID validation and actual Squirrel replacement/relaunch require the signed artifact tests below.
+Sign the complete `Squirrel.framework` with the same Developer ID identity before signing the outer app. Its `Resources/ShipIt` path resolves to the framework executable; signing only the outer app is insufficient. The framework layout, strict nested ad-hoc signing, rejection of an unrelated target, and actual creation of a second instance while the first is running have been checked with a harmless local fixture. Developer ID validation and actual Squirrel replacement/relaunch require the signed artifact tests below.
 
 ## Building the bridge
 
@@ -84,18 +84,41 @@ bash native/migration/stage-bridge.sh NEW_STAGING_DIRECTORY
 bash native/migration/provision-legacy-ios.sh NEW_STAGING_DIRECTORY arm64
 cd NEW_STAGING_DIRECTORY
 npm ci
-npm run make -- --arch=arm64
+npm run make -- --arch=arm64 --targets=@electron-forge/maker-zip
 ```
 
 Staging changes only the generated copy to version 0.3.9 and uses the committed bridge dependency lock. `npm ci` still runs Electron's required installation hook; the provisioned go-ios binary makes the project's postinstall skip rebuilding it. Set `LEGACY_APP_ARCHIVE` to a cached v0.3.8 ZIP to avoid downloading it again; both its archive hash and extracted binary hash are checked.
 
-The shared CI signing setup supplies `APPLE_SIGN_ID`, `APPLE_INSTALLER_SIGN_ID`, `KEYCHAIN_PATH`, and the existing Apple notarization credentials. Forge signs/notarizes the app. The PKG requires a separate notarization submission and staple, as in the existing Electron release process. Collect `out/make/**/*.zip` and `out/make/**/*.pkg` as review artifacts, never publish them from the build step.
+The shared CI signing setup supplies `APPLE_SIGN_ID`, `APPLE_INSTALLER_SIGN_ID`, `KEYCHAIN_PATH`, and the existing Apple notarization credentials. Forge signs/notarizes the app and makes the ZIP. `native/release/build-bridge-pkg.sh` builds its installer directly with a bounded `productbuild` invocation, preserving the bridge's minimum OS and architecture. The PKG requires a separate notarization submission and staple, as in the existing Electron release process. Collect the ZIP and PKG as review artifacts, never publish them from the build step.
 
 Run the isolated bridge policy/event tests with:
 
 ```sh
 node --test native/migration/bridge.test.cjs
 ```
+
+## Isolated component tests
+
+Run real signed-bundle replacement without launching any application main:
+
+```sh
+python3 native/migration/test-shipit.py \
+  --legacy PATH_TO_PUBLISHED_0.3.8_ZIP \
+  --report-directory NEW_REPORT_DIRECTORY \
+  PATH_TO_SIGNED_0.3.9_BRIDGE_ZIP PATH_TO_SIGNED_1.0.0_NATIVE_ZIP
+```
+
+The script pins the initial archive's SHA-256, creates fresh copies under `/private/tmp`, and uses each currently installed Electron version's genuine ShipIt executable for the next replacement. Every request sets `launchAfterInstallation` to `false`. It verifies strict signatures, the previous app's designated requirement, a changed target inode, and the complete installed bundle's file/symlink hash. It preserves JSON evidence and ShipIt logs, then removes its temporary application copies and uniquely named test preference domains. It accepts no installed-app destination and never invokes the Electron or native application main.
+
+The fixture itself passed locally against the published arm64 app (0.3.8 → 0.3.8). That baseline validates the harness protocol; the bridge/native chain must use the actual signed CI ZIPs. This component test bypasses HTTP routing, updater download/extraction, user approval, and automatic relaunch, and does not validate minimum-OS behavior.
+
+Separately, in a macOS GUI session:
+
+```sh
+python3 native/migration/test-launcher.py
+```
+
+This compiles a harmless short-lived AppKit fixture, includes the production launcher, signs it ad hoc, and verifies strict nested signatures, unrelated-target rejection, and launching a new instance while one is already running. The fixture performs no network, location, or device operations. It is a launcher protocol test, not a claim that the shipping native app has relaunched successfully through Squirrel.
 
 ## Required isolated migration test
 
@@ -117,3 +140,4 @@ Changing a disposable copy of the updater's feed or linking the old Squirrel fra
 - [Public service release selection](https://github.com/electron/update.electronjs.org/blob/9652cd82a680d695de6658524873b57843b631f7/src/updates.ts): release-tag version, first matching asset, draft/prerelease exclusion, up to 100 releases, and no OS filter.
 - [Old Squirrel bundle lookup/verification](https://github.com/Squirrel/Squirrel.Mac/blob/0e5d146ba13101a1302d59ea6e6e0b3cace4ae38/Squirrel/SQRLUpdater.m#L551-L592), [designated-requirement validation](https://github.com/Squirrel/Squirrel.Mac/blob/0e5d146ba13101a1302d59ea6e6e0b3cace4ae38/Squirrel/SQRLCodeSignature.m#L78-L127).
 - [Old ShipIt replacement](https://github.com/Squirrel/Squirrel.Mac/blob/0e5d146ba13101a1302d59ea6e6e0b3cace4ae38/Squirrel/SQRLInstaller.m#L217-L313) and [same-path relaunch requirement](https://github.com/Squirrel/Squirrel.Mac/blob/0e5d146ba13101a1302d59ea6e6e0b3cace4ae38/Squirrel/ShipIt-main.m#L113-L154).
+- Electron's applied patches for [strict nested signature validation](https://github.com/electron/electron/blob/v32.1.2/patches/squirrel.mac/fix_use_kseccschecknestedcode_kseccsstrictvalidate_in_the_sec.patch), [`posix_spawn` relaunch](https://github.com/electron/electron/blob/v32.1.2/patches/squirrel.mac/refactor_use_posix_spawn_instead_of_nstask_so_we_can_disclaim_the.patch), and [the final running-app guard](https://github.com/electron/electron/blob/v32.1.2/patches/squirrel.mac/fix_abort_installation_attempt_at_the_final_mile_if_the_app_is.patch). The guard matches both bundle identifier and exact target path, so a live app at a different path is not the test's replacement target.
