@@ -1,0 +1,532 @@
+diff --git a/ios/connection_selection.go b/ios/connection_selection.go
+new file mode 100644
+index 0000000..202dc4f
+--- /dev/null
++++ b/ios/connection_selection.go
+@@ -0,0 +1,42 @@
++package ios
++
++import (
++	"fmt"
++	"sort"
++)
++
++// SelectDevices filters before selection without changing the discovery snapshot.
++// Empty transport preserves discovery of both transports, with USB preferred.
++func SelectDevices(devices DeviceList, udid, transport string) (DeviceList, error) {
++	if transport != "" && transport != "USB" && transport != "Network" {
++		return DeviceList{}, fmt.Errorf("PARACHUTE_CONNECTION_TYPE must be USB or Network, got %q", transport)
++	}
++	selected := DeviceList{DeviceList: make([]DeviceEntry, 0, len(devices.DeviceList))}
++	for _, device := range devices.DeviceList {
++		if (udid == "" || device.Properties.SerialNumber == udid) &&
++			(transport == "" || device.ConnectionTypeLabel() == transport) {
++			selected.DeviceList = append(selected.DeviceList, device)
++		}
++	}
++	priority := func(device DeviceEntry) int {
++		switch device.ConnectionTypeLabel() {
++		case "USB":
++			return 0
++		case "Network":
++			return 1
++		default:
++			return 2
++		}
++	}
++	sort.SliceStable(selected.DeviceList, func(i, j int) bool {
++		a, b := selected.DeviceList[i], selected.DeviceList[j]
++		if priority(a) != priority(b) {
++			return priority(a) < priority(b)
++		}
++		if a.Properties.SerialNumber != b.Properties.SerialNumber {
++			return a.Properties.SerialNumber < b.Properties.SerialNumber
++		}
++		return a.DeviceID < b.DeviceID
++	})
++	return selected, nil
++}
+diff --git a/ios/connection_selection_test.go b/ios/connection_selection_test.go
+new file mode 100644
+index 0000000..31c6d80
+--- /dev/null
++++ b/ios/connection_selection_test.go
+@@ -0,0 +1,39 @@
++package ios
++
++import "testing"
++
++func parachuteDevice(udid, transport string, id int) DeviceEntry {
++	return DeviceEntry{DeviceID: id, Properties: DeviceProperties{SerialNumber: udid, ConnectionType: transport}}
++}
++
++func TestParachuteSelectionPrefersUSBDeterministically(t *testing.T) {
++	network, usb2, usb1 := parachuteDevice("target", "Network", 1), parachuteDevice("target", "USB", 20), parachuteDevice("target", "USB", 10)
++	for _, order := range [][]DeviceEntry{{network, usb2, usb1}, {usb2, network, usb1}, {usb1, usb2, network}} {
++		result, err := SelectDevices(DeviceList{order}, "target", "")
++		if err != nil || len(result.DeviceList) != 3 || result.DeviceList[0].DeviceID != 10 || result.DeviceList[2].ConnectionTypeLabel() != "Network" {
++			t.Fatalf("selection: %+v, %v", result, err)
++		}
++	}
++	original := DeviceList{[]DeviceEntry{network, usb1}}
++	_, _ = SelectDevices(original, "", "")
++	if original.DeviceList[0] != network {
++		t.Fatal("selection changed the discovery snapshot")
++	}
++}
++
++func TestParachuteSelectionFiltersTargetAndTransport(t *testing.T) {
++	devices := DeviceList{[]DeviceEntry{parachuteDevice("other", "USB", 1), parachuteDevice("target", "Network", 2), parachuteDevice("target", "USB", 3)}}
++	for _, transport := range []string{"USB", "Network"} {
++		result, err := SelectDevices(devices, "target", transport)
++		if err != nil || len(result.DeviceList) != 1 || result.DeviceList[0].Properties.SerialNumber != "target" || result.DeviceList[0].ConnectionTypeLabel() != transport {
++			t.Fatalf("%s: %+v, %v", transport, result, err)
++		}
++	}
++	result, err := SelectDevices(DeviceList{[]DeviceEntry{devices.DeviceList[1]}}, "target", "USB")
++	if err != nil || len(result.DeviceList) != 0 {
++		t.Fatal("USB selection fell back to Network")
++	}
++	if _, err := SelectDevices(devices, "target", "usb"); err == nil {
++		t.Fatal("invalid transport accepted")
++	}
++}
+diff --git a/ios/tunnel/parachute_transport_test.go b/ios/tunnel/parachute_transport_test.go
+new file mode 100644
+index 0000000..1b670a1
+--- /dev/null
++++ b/ios/tunnel/parachute_transport_test.go
+@@ -0,0 +1,136 @@
++package tunnel
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"net"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++	"time"
++
++	"github.com/Masterminds/semver"
++	"github.com/danielpaulus/go-ios/ios"
++)
++
++type parachuteDevices struct{ devices []ios.DeviceEntry }
++
++func (d *parachuteDevices) ListDevices() (ios.DeviceList, error) {
++	return ios.DeviceList{DeviceList: d.devices}, nil
++}
++
++type parachuteStarter struct {
++	started []ios.DeviceEntry
++	closed  int
++	fail    bool
++}
++
++func (s *parachuteStarter) StartTunnel(_ context.Context, d ios.DeviceEntry, _ PairRecordManager, _ *semver.Version, _ bool) (Tunnel, error) {
++	s.started = append(s.started, d)
++	if s.fail {
++		return Tunnel{}, errors.New("fake startup failed")
++	}
++	return Tunnel{Udid: d.Properties.SerialNumber, closer: func() error { s.closed++; return nil }}, nil
++}
++func parachuteEntry(udid, transport string, id int) ios.DeviceEntry {
++	return ios.DeviceEntry{DeviceID: id, Properties: ios.DeviceProperties{SerialNumber: udid, ConnectionType: transport}}
++}
++func parachuteManager(d *parachuteDevices, s *parachuteStarter) *TunnelManager {
++	return &TunnelManager{dl: d, ts: s, tunnels: map[string]Tunnel{}, startTunnelTimeout: time.Second, getVersion: func(ios.DeviceEntry) (*semver.Version, error) { return semver.MustParse("27.2.0"), nil }}
++}
++
++func TestParachuteTunnelManagerScopesAndDeduplicatesTransport(t *testing.T) {
++	t.Setenv("GO_IOS_UDID", "target")
++	t.Setenv("PARACHUTE_CONNECTION_TYPE", "USB")
++	d := &parachuteDevices{[]ios.DeviceEntry{parachuteEntry("target", "Network", 1), parachuteEntry("other", "USB", 2), parachuteEntry("target", "USB", 4), parachuteEntry("target", "USB", 3)}}
++	s := &parachuteStarter{}
++	m := parachuteManager(d, s)
++	for i := 0; i < 2; i++ {
++		if err := m.UpdateTunnels(context.Background()); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if len(s.started) != 1 || s.started[0].DeviceID != 3 || m.tunnels["target"].ConnectionType != "USB" {
++		t.Fatalf("wrong tunnel selection: %+v", s.started)
++	}
++	d.devices = []ios.DeviceEntry{parachuteEntry("target", "Network", 1)}
++	if err := m.UpdateTunnels(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	if len(s.started) != 1 || s.closed != 1 || len(m.tunnels) != 0 {
++		t.Fatal("USB disconnect silently reused Network")
++	}
++}
++
++func TestParachuteTunnelManagerReplacesWirelessWhenUSBAppears(t *testing.T) {
++	t.Setenv("GO_IOS_UDID", "target")
++	t.Setenv("PARACHUTE_CONNECTION_TYPE", "")
++	d := &parachuteDevices{[]ios.DeviceEntry{parachuteEntry("target", "Network", 1)}}
++	s := &parachuteStarter{}
++	m := parachuteManager(d, s)
++	if err := m.UpdateTunnels(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	d.devices = append(d.devices, parachuteEntry("target", "USB", 2))
++	if err := m.UpdateTunnels(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	if len(s.started) != 2 || s.closed != 1 || m.tunnels["target"].ConnectionType != "USB" {
++		t.Fatal("existing wireless tunnel bypassed USB preference")
++	}
++}
++
++func TestParachuteTunnelManagerDoesNotFallBackAfterUSBFailure(t *testing.T) {
++	t.Setenv("GO_IOS_UDID", "target")
++	t.Setenv("PARACHUTE_CONNECTION_TYPE", "")
++	d := &parachuteDevices{[]ios.DeviceEntry{parachuteEntry("target", "Network", 1), parachuteEntry("target", "USB", 2)}}
++	s := &parachuteStarter{fail: true}
++	m := parachuteManager(d, s)
++	if err := m.UpdateTunnels(context.Background()); err != nil {
++		t.Fatal(err)
++	}
++	if len(s.started) != 1 || s.started[0].ConnectionTypeLabel() != "USB" || len(m.tunnels) != 0 {
++		t.Fatal("failed USB silently fell back to Network")
++	}
++	t.Setenv("PARACHUTE_CONNECTION_TYPE", "invalid")
++	if err := m.UpdateTunnels(context.Background()); err == nil || len(s.started) != 1 {
++		t.Fatal("invalid transport reached tunnel startup")
++	}
++}
++
++func TestParachuteTunnelResponsesRequireMatchingIdentityAndTransport(t *testing.T) {
++	t.Setenv("GO_IOS_UDID", "target")
++	t.Setenv("PARACHUTE_CONNECTION_TYPE", "USB")
++	response := Tunnel{Udid: "target", ConnectionType: "USB"}
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.URL.Path == "/tunnels" {
++			_ = json.NewEncoder(w).Encode([]Tunnel{response, {Udid: "target", ConnectionType: "Network"}, {Udid: "other", ConnectionType: "USB"}, {Udid: "target"}})
++		} else {
++			_ = json.NewEncoder(w).Encode(response)
++		}
++	}))
++	defer server.Close()
++	address := server.Listener.Addr().(*net.TCPAddr)
++	for _, transport := range []string{"", "Network", "USB"} {
++		response.ConnectionType = transport
++		_, err := TunnelInfoForDevice("target", address.IP.String(), address.Port)
++		if (err == nil) != (transport == "USB") {
++			t.Fatalf("transport %q validation: %v", transport, err)
++		}
++	}
++	response.Udid = "other"
++	if _, err := TunnelInfoForDevice("target", address.IP.String(), address.Port); err == nil {
++		t.Fatal("wrong device accepted")
++	}
++	response.Udid = "target"
++	listed, err := ListRunningTunnels(address.IP.String(), address.Port)
++	if err != nil || len(listed) != 1 || listed[0].ConnectionType != "USB" {
++		t.Fatalf("wrong filtered list: %+v %v", listed, err)
++	}
++	t.Setenv("PARACHUTE_CONNECTION_TYPE", "")
++	response.ConnectionType = "Network"
++	if _, err := TunnelInfoForDevice("target", address.IP.String(), address.Port, "USB"); err == nil {
++		t.Fatal("implicit USB selection accepted wireless tunnel")
++	}
++}
+diff --git a/ios/tunnel/tunnel.go b/ios/tunnel/tunnel.go
+index a88b551..529349c 100644
+--- a/ios/tunnel/tunnel.go
++++ b/ios/tunnel/tunnel.go
+@@ -34,6 +34,8 @@ type Tunnel struct {
+ 	RsdPort int `json:"rsdPort"`
+ 	// Udid is the id of the device for this tunnel
+ 	Udid string `json:"udid"`
++	// ConnectionType identifies the actual usbmuxd transport used to create this tunnel.
++	ConnectionType string `json:"connectionType"`
+ 	// Userspace TUN device is used, connect to the local tcp port at Default
+ 	UserspaceTUN     bool `json:"userspaceTun"`
+ 	UserspaceTUNPort int  `json:"userspaceTunPort"`
+diff --git a/ios/tunnel/tunnel_api.go b/ios/tunnel/tunnel_api.go
+index 69a3012..1edf000 100644
+--- a/ios/tunnel/tunnel_api.go
++++ b/ios/tunnel/tunnel_api.go
+@@ -168,7 +168,7 @@ func ServeTunnelInfo(tm *TunnelManager, port int) error {
+ 	return nil
+ }
+ 
+-func TunnelInfoForDevice(udid string, tunnelInfoHost string, tunnelInfoPort int) (Tunnel, error) {
++func TunnelInfoForDevice(udid string, tunnelInfoHost string, tunnelInfoPort int, selectedConnectionType ...string) (Tunnel, error) {
+ 	c := http.Client{
+ 		Timeout: 5 * time.Second,
+ 	}
+@@ -187,6 +187,19 @@ func TunnelInfoForDevice(udid string, tunnelInfoHost string, tunnelInfoPort int)
+ 	if err != nil {
+ 		return Tunnel{}, fmt.Errorf("TunnelInfoForDevice: failed to parse response: %w", err)
+ 	}
++	if info.Udid != udid {
++		return Tunnel{}, fmt.Errorf("TunnelInfoForDevice: response is not for the requested device")
++	}
++	transport := os.Getenv("PARACHUTE_CONNECTION_TYPE")
++	if len(selectedConnectionType) > 0 {
++		transport = selectedConnectionType[0]
++	}
++	if _, err := ios.SelectDevices(ios.DeviceList{}, "", transport); err != nil {
++		return Tunnel{}, err
++	}
++	if transport != "" && info.ConnectionType != transport {
++		return Tunnel{}, fmt.Errorf("TunnelInfoForDevice: expected %s connection, got %q; start a matching tunnel", transport, info.ConnectionType)
++	}
+ 	return info, nil
+ }
+ 
+@@ -209,7 +222,17 @@ func ListRunningTunnels(tunnelInfoHost string, tunnelInfoPort int) ([]Tunnel, er
+ 	if err != nil {
+ 		return nil, fmt.Errorf("TunnelInfoForDevice: failed to parse response: %w", err)
+ 	}
+-	return info, nil
++	transport, udid := os.Getenv("PARACHUTE_CONNECTION_TYPE"), os.Getenv("GO_IOS_UDID")
++	if _, err := ios.SelectDevices(ios.DeviceList{}, "", transport); err != nil {
++		return nil, err
++	}
++	selected := make([]Tunnel, 0, len(info))
++	for _, tunnel := range info {
++		if (udid == "" || tunnel.Udid == udid) && (transport == "" || tunnel.ConnectionType == transport) {
++			selected = append(selected, tunnel)
++		}
++	}
++	return selected, nil
+ }
+ 
+ // TunnelManager starts tunnels for devices when needed (if no tunnel is running yet) and stores the information
+@@ -225,6 +248,7 @@ type TunnelManager struct {
+ 	userspaceTUN         bool
+ 	closeOnce            sync.Once
+ 	portOffset           int
++	getVersion           func(ios.DeviceEntry) (*semver.Version, error)
+ }
+ 
+ // NewTunnelManager creates a new TunnelManager instance for setting up device tunnels for all connected devices
+@@ -238,6 +262,7 @@ func NewTunnelManager(pm PairRecordManager, userspaceTUN bool) *TunnelManager {
+ 		startTunnelTimeout: 10 * time.Second,
+ 		userspaceTUN:       userspaceTUN,
+ 		portOffset:         1,
++		getVersion:         ios.GetProductVersion,
+ 	}
+ }
+ 
+@@ -280,11 +305,24 @@ func (m *TunnelManager) UpdateTunnels(ctx context.Context) error {
+ 	if err != nil {
+ 		return fmt.Errorf("UpdateTunnels: failed to get list of devices: %w", err)
+ 	}
++	devices, err = ios.SelectDevices(devices, os.Getenv("GO_IOS_UDID"), os.Getenv("PARACHUTE_CONNECTION_TYPE"))
++	if err != nil {
++		return err
++	}
++	seen := make(map[string]bool)
+ 	for _, d := range devices.DeviceList {
+ 		udid := d.Properties.SerialNumber
+-		if _, exists := localTunnels[udid]; exists {
++		if seen[udid] {
+ 			continue
+ 		}
++		seen[udid] = true
++		if existing, exists := localTunnels[udid]; exists {
++			if existing.ConnectionType == d.ConnectionTypeLabel() {
++				continue
++			}
++			_ = m.stopTunnel(existing)
++			delete(localTunnels, udid)
++		}
+ 		if m.userspaceTUN && d.UserspaceTUNPort == 0 {
+ 			d.UserspaceTUNPort = ios.HttpApiPort() + m.portOffset
+ 			m.portOffset++
+@@ -339,7 +377,7 @@ func (m *TunnelManager) startTunnel(ctx context.Context, device ios.DeviceEntry)
+ 	log.WithField("udid", device.Properties.SerialNumber).Info("start tunnel")
+ 	startTunnelCtx, cancel := context.WithTimeout(ctx, m.startTunnelTimeout)
+ 	defer cancel()
+-	version, err := ios.GetProductVersion(device)
++	version, err := m.getVersion(device)
+ 	if err != nil {
+ 		return Tunnel{}, fmt.Errorf("startTunnel: failed to get device version: %w", err)
+ 	}
+@@ -347,6 +385,7 @@ func (m *TunnelManager) startTunnel(ctx context.Context, device ios.DeviceEntry)
+ 	if err != nil {
+ 		return Tunnel{}, err
+ 	}
++	t.ConnectionType = device.ConnectionTypeLabel()
+ 	return t, nil
+ }
+ 
+diff --git a/ios/utils.go b/ios/utils.go
+index 180ac5e..80b24ec 100755
+--- a/ios/utils.go
++++ b/ios/utils.go
+@@ -132,6 +132,10 @@ func GetDeviceWithAddress(udid string, address string, provider RsdPortProvider)
+ 	if err != nil {
+ 		return DeviceEntry{}, err
+ 	}
++	deviceList, err = SelectDevices(deviceList, udid, os.Getenv("PARACHUTE_CONNECTION_TYPE"))
++	if err != nil {
++		return DeviceEntry{}, err
++	}
+ 	if udid == "" {
+ 		if len(deviceList.DeviceList) == 0 {
+ 			return DeviceEntry{}, errors.New("no iOS devices are attached to this host")
+diff --git a/main.go b/main.go
+index 57ed4ef..285d34e 100644
+--- a/main.go
++++ b/main.go
+@@ -503,7 +503,7 @@ The commands work as following:
+ 			}
+ 			device = deviceWithRsdProvider(device, udid, address, rsdPort)
+ 		} else {
+-			info, err := tunnel.TunnelInfoForDevice(device.Properties.SerialNumber, tunnelInfoHost, tunnelInfoPort)
++			info, err := tunnel.TunnelInfoForDevice(device.Properties.SerialNumber, tunnelInfoHost, tunnelInfoPort, device.ConnectionTypeLabel())
+ 			if err == nil {
+ 				device.UserspaceTUNPort = info.UserspaceTUNPort
+ 				device.UserspaceTUNHost = userspaceTunnelHost
+@@ -2552,6 +2552,9 @@ func printDeviceList(details bool) {
+ 		exitIfError("failed getting device list", err)
+ 	}
+ 
++	deviceList, err = ios.SelectDevices(deviceList, "", os.Getenv("PARACHUTE_CONNECTION_TYPE"))
++	exitIfError("invalid connection selection", err)
++
+ 	if details {
+ 		if JSONdisabled {
+ 			outputDetailedListNoJSON(deviceList)
+@@ -2573,34 +2576,59 @@ type detailsEntry struct {
+ 	ProductType    string
+ 	ProductVersion string
+ 	ConnectionType string
++	Error          string `json:",omitempty"`
+ }
+ 
+-
+-func outputDetailedList(deviceList ios.DeviceList) {
++// A stale wireless endpoint must not hide healthy USB rows. Queries have one
++// shared deadline; list is a short-lived CLI process, so outstanding reads end
++// when main returns. Buffered results never leave a sender waiting on the reader.
++func detailedEntries(deviceList ios.DeviceList, getValues func(ios.DeviceEntry) (ios.GetAllValuesResponse, error), timeout time.Duration) []detailsEntry {
++	type response struct {
++		index  int
++		values ios.GetAllValuesResponse
++		err    error
++	}
+ 	result := make([]detailsEntry, len(deviceList.DeviceList))
+-	for i, device := range deviceList.DeviceList {
+-		udid := device.Properties.SerialNumber
+-		allValues, err := ios.GetValues(device)
+-		exitIfError("failed getting values", err)
+-		result[i] = detailsEntry{
+-			Udid:           udid,
+-			ProductName:    allValues.Value.ProductName,
+-			ProductType:    allValues.Value.ProductType,
+-			ProductVersion: allValues.Value.ProductVersion,
+-			ConnectionType: device.ConnectionTypeLabel(),
++	responses := make(chan response, len(result))
++	for index, device := range deviceList.DeviceList {
++		result[index] = detailsEntry{Udid: device.Properties.SerialNumber,
++			ConnectionType: device.ConnectionTypeLabel(), Error: "device metadata query timed out"}
++		go func(index int, device ios.DeviceEntry) {
++			values, err := getValues(device)
++			responses <- response{index: index, values: values, err: err}
++		}(index, device)
++	}
++	timer := time.NewTimer(timeout)
++	defer timer.Stop()
++	for remaining := len(result); remaining > 0; remaining-- {
++		select {
++		case answer := <-responses:
++			entry := &result[answer.index]
++			if answer.err != nil {
++				entry.Error = answer.err.Error()
++				continue
++			}
++			entry.Error = ""
++			entry.ProductName = answer.values.Value.ProductName
++			entry.ProductType = answer.values.Value.ProductType
++			entry.ProductVersion = answer.values.Value.ProductVersion
++		case <-timer.C:
++			return result
+ 		}
+ 	}
++	return result
++}
++
++func outputDetailedList(deviceList ios.DeviceList) {
+ 	fmt.Println(convertToJSONString(map[string][]detailsEntry{
+-		"deviceList": result,
++		"deviceList": detailedEntries(deviceList, ios.GetValues, 2*time.Second),
+ 	}))
+ }
+ 
+ func outputDetailedListNoJSON(deviceList ios.DeviceList) {
+-	for _, device := range deviceList.DeviceList {
+-		udid := device.Properties.SerialNumber
+-		allValues, err := ios.GetValues(device)
+-		exitIfError("failed getting values", err)
+-		fmt.Printf("%s  %s  %s  %s  %s\n", udid, allValues.Value.ProductName, allValues.Value.ProductType, allValues.Value.ProductVersion, device.ConnectionTypeLabel())
++	for _, entry := range detailedEntries(deviceList, ios.GetValues, 2*time.Second) {
++		fmt.Printf("%s  %s  %s  %s  %s  %s\n", entry.Udid, entry.ProductName, entry.ProductType,
++			entry.ProductVersion, entry.ConnectionType, entry.Error)
+ 	}
+ }
+ 
+diff --git a/parachute_details_test.go b/parachute_details_test.go
+new file mode 100644
+index 0000000..3c687e2
+--- /dev/null
++++ b/parachute_details_test.go
+@@ -0,0 +1,51 @@
++package main
++
++import (
++	"encoding/json"
++	"errors"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/danielpaulus/go-ios/ios"
++)
++
++func parachuteDiscoveryDevices() ios.DeviceList {
++	return ios.DeviceList{DeviceList: []ios.DeviceEntry{
++		{Properties: ios.DeviceProperties{SerialNumber: "target", ConnectionType: "Network"}},
++		{Properties: ios.DeviceProperties{SerialNumber: "target", ConnectionType: "USB"}},
++	}}
++}
++
++func TestParachuteDetailsPreservesHealthyUSBWhenWirelessFails(t *testing.T) {
++	entries := detailedEntries(parachuteDiscoveryDevices(), func(d ios.DeviceEntry) (ios.GetAllValuesResponse, error) {
++		if d.ConnectionTypeLabel() == "Network" {
++			return ios.GetAllValuesResponse{}, errors.New("wireless endpoint refused")
++		}
++		return ios.GetAllValuesResponse{Value: ios.AllValuesType{ProductName: "iPhone", ProductVersion: "27.2"}}, nil
++	}, time.Second)
++	if len(entries) != 2 || entries[0].Udid != "target" || entries[0].ConnectionType != "Network" || entries[0].Error != "wireless endpoint refused" || entries[1].ProductName != "iPhone" || entries[1].Error != "" {
++		t.Fatalf("lost partial results: %+v", entries)
++	}
++	data, err := json.Marshal(entries[1])
++	if err != nil || strings.Contains(string(data), "Error") {
++		t.Fatalf("successful row must omit Error: %s, %v", data, err)
++	}
++}
++
++func TestParachuteDetailsBoundsUnresponsiveWirelessEndpoint(t *testing.T) {
++	release, done := make(chan struct{}), make(chan struct{})
++	defer func() { close(release); <-done }()
++	start := time.Now()
++	entries := detailedEntries(parachuteDiscoveryDevices(), func(d ios.DeviceEntry) (ios.GetAllValuesResponse, error) {
++		if d.ConnectionTypeLabel() == "Network" {
++			<-release
++			close(done)
++			return ios.GetAllValuesResponse{}, errors.New("closed")
++		}
++		return ios.GetAllValuesResponse{Value: ios.AllValuesType{ProductName: "iPhone"}}, nil
++	}, 50*time.Millisecond)
++	if time.Since(start) > time.Second || len(entries) != 2 || entries[0].Error != "device metadata query timed out" || entries[1].ProductName != "iPhone" || entries[1].Error != "" {
++		t.Fatalf("deadline lost healthy USB row: %+v", entries)
++	}
++}

@@ -1,0 +1,79 @@
+"app.subtitle" = "選擇一處地點，即刻出發。";
+"device.title" = "你的裝置";
+"device.transport.usb" = "USB 連線";
+"device.transport.network" = "網路連線";
+"device.disconnected" = "透過 USB 連接 iPhone";
+"device.untrusted" = "請在 iPhone 上點選「信任」";
+"device.developerModeOff" = "需要開啟開發者模式";
+"device.error" = "無法連接裝置";
+"device.connect" = "連接裝置";
+"device.trust" = "信任裝置";
+"device.developerMode" = "開啟開發者模式";
+"device.simulate" = "模擬位置";
+"device.update" = "更新位置";
+"device.busy" = "處理中…";
+"device.guide.title" = "連接你的 iPhone";
+"device.guide.body" = "使用 USB 連接線將 iPhone 連接到 Mac，解鎖手機，並在出現提示時點選「信任」。如果未出現提示，請拔除連接線後重新連接。";
+"device.devGuide.title" = "開啟開發者模式";
+"device.devGuide.body" = "在 iPhone 上開啟「設定 → 隱私權與安全性 → 開發者模式」。開啟後重新啟動 iPhone，解鎖並確認啟用。";
+"device.connected" = "已連接";
+"device.refresh" = "重新整理裝置狀態";
+"device.success" = "位置已更新";
+"coordinate.title" = "編輯經緯度";
+"coordinate.hint" = "輸入十進位度數座標，使用小數點。";
+"coordinate.longitude" = "經度";
+"coordinate.latitude" = "緯度";
+"coordinate.lon" = "經";
+"coordinate.lat" = "緯";
+"coordinate.longitudeHint" = "−180 至 180 · 東經 + / 西經 −";
+"coordinate.latitudeHint" = "−90 至 90 · 北緯 + / 南緯 −";
+"coordinate.error" = "請輸入有效座標：緯度 −90 至 90，經度 −180 至 180。使用小數點，請勿輸入逗號。";
+"coordinate.edit" = "編輯經緯度";
+"coordinate.empty" = "尚未選擇位置";
+"action.cancel" = "取消";
+"action.save" = "確認位置";
+"action.done" = "完成";
+"map.hint" = "點選地圖上的任意位置，選擇目的地";
+"map.selected" = "已選位置";
+"status.selected" = "已選擇位置";
+"status.none" = "選擇一個位置，開始使用";
+"status.prototype" = "原生預覽";
+
+"map.style" = "切換地圖樣式";
+
+"device.statusUnknown" = "無法確定開發者模式狀態。";
+"device.trustRequired" = "請解鎖 iPhone 並點選「信任」。";
+"device.discoveryFailed" = "無法讀取裝置狀態，請重新連接 USB 連接線後再試一次。";
+"device.binaryMissing" = "應用程式內缺少 go-ios 執行檔。";
+"device.developerModeRequested" = "請在 iPhone 上確認開啟開發者模式，然後重新啟動手機。";
+"device.developerModeFailed" = "無法開啟開發者模式，請在 iPhone 設定中手動開啟。";
+"device.invalidCoordinates" = "請輸入有效的經緯度。";
+"device.commandCompleted" = "定位指令已完成，請在 iPhone 上確認實際位置。";
+"device.simulationUnverified" = "定位指令正在執行，請在 iPhone 上確認實際位置。";
+"device.simulationFailed" = "位置模擬失敗，請重新連接裝置並檢查通道。";
+
+"map.satellite" = "衛星";
+
+"device.guide.reconnect" = "如果手機沒有顯示「信任」，或先前點選了「不信任」，請拔除 USB 連接線並重新連接 iPhone。";
+
+"device.details" = "詳細資訊";
+"device.showLog" = "在 Finder 中顯示錯誤記錄";
+
+"map.standard" = "平面地圖";
+
+"search.placeholder" = "搜尋地點或地址";
+"search.submit" = "搜尋";
+"search.clear" = "清除搜尋";
+"search.searching" = "搜尋中…";
+"search.suggestions" = "建議";
+"search.results" = "搜尋結果";
+"search.failed" = "搜尋暫時無法使用，請再試一次。";
+"search.noResults" = "找不到地點";
+
+"update.check" = "檢查更新…";
+
+"update.automatic" = "自動檢查更新";
+
+"update.unavailable" = "本機預覽版暫不檢查更新。";
+"device.tryUSB" = "請嘗試使用 USB 連接線連接 iPhone，解鎖並在出現提示時點選「信任」，然後再試一次。";
+"device.connectionChanged" = "連線方式已變更。請重新點選「模擬位置」以使用目前連線。";

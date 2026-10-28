@@ -1,0 +1,2 @@
+# Unified patches contain mandatory context prefixes before Go tabs and blank lines.
+patches/go-ios/*.patch -whitespace
