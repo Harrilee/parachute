@@ -7,12 +7,12 @@ on:
       version:
         description: Native marketing version
         required: true
-        default: '1.0.0'
+        default: '1.0.1'
         type: string
       build_number:
         description: Monotonically increasing native build number
         required: true
-        default: '1000000'
+        default: '1000001'
         type: string
       bundle_id:
         description: Bundle identity verified from the published Electron app
@@ -83,21 +83,21 @@ jobs:
           test "$(uname -m)" = "$RELEASE_ARCH"
           xcodebuild -version
       - name: Build pinned go-ios with success acknowledgement
-        run: bash native/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
+        run: bash scripts/release/build-go-ios.sh "$RELEASE_ARCH" "$RUNNER_TEMP/ios-native"
       - name: Native tests
         run: |
-          python3 native/Tests/ReleaseToolsTests.py
-          NATIVE_TEST_SPARKLE=1 bash native/test.sh
+          python3 Tests/ReleaseTests/ReleaseToolsTests.py
+          NATIVE_TEST_SPARKLE=1 bash scripts/test.sh
       - name: Exercise actual Sparkle install and relaunch in an isolated fixture
         run: |
           if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
-            python3 native/Tests/SparkleUpgradeTest.py
+            python3 Tests/Integration/SparkleUpgradeTest.py
           else
             echo '::warning::Sparkle install/relaunch fixture skipped: runner has no GUI login session.'
           fi
       - name: Fetch verified Sparkle framework
         run: |
-          SPARKLE_ROOT="$(bash native/updater/fetch-sparkle.sh)"
+          SPARKLE_ROOT="$(bash scripts/updates/fetch-sparkle.sh)"
           printf 'SPARKLE_ROOT=%s\nSPARKLE_FRAMEWORK_PATH=%s/Sparkle.framework\n' "$SPARKLE_ROOT" "$SPARKLE_ROOT" >> "$GITHUB_ENV"
       - name: Build release app
         env:
@@ -108,9 +108,9 @@ jobs:
           NATIVE_GO_IOS_BUILD_INFO: ${{ runner.temp }}/ios-native.build-info.txt
         run: |
           export SPARKLE_FEED_URL="${FEED_BASE_URL%/}/appcast-$ASSET_ARCH.xml"
-          export SPARKLE_PUBLIC_KEY="$(cat native/updater/public-key.txt)"
-          bash native/build.sh "$RUNNER_TEMP/Parachute.app"
-          bash native/migration/build-launcher.sh "$RUNNER_TEMP/Parachute.app" "$ASSET_ARCH"
+          export SPARKLE_PUBLIC_KEY="$(cat Resources/Sparkle/public-key.txt)"
+          bash scripts/build.sh "$RUNNER_TEMP/Parachute.app"
+          bash scripts/migration/build-launcher.sh "$RUNNER_TEMP/Parachute.app" "$ASSET_ARCH"
       - name: Import existing Apple signing and notarization credentials
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -120,33 +120,33 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: bash native/release/import-signing.sh
+        run: bash scripts/release/import-signing.sh
       - name: Sign native app and nested code
-        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" sign
+        run: bash scripts/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" sign
       - name: Notarize native app and create stapled ZIP
-        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-app
+        run: bash scripts/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-app
       - name: Build and sign native PKG (10 minute limit)
-        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" build-pkg
+        run: bash scripts/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" build-pkg
       - name: Notarize and staple native PKG
-        run: bash native/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-pkg
+        run: bash scripts/release/package.sh "$RUNNER_TEMP/Parachute.app" "$RUNNER_TEMP/native-artifacts" notarize-pkg
       - name: Verify ZIP and install PKG on disposable runner
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CI_INSTALL_TEST: '1'
-        run: bash native/release/verify-artifacts.sh "$RUNNER_TEMP/native-artifacts"
+        run: bash scripts/release/verify-artifacts.sh "$RUNNER_TEMP/native-artifacts"
       - name: Generate signed Sparkle feed for review
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          printf '%s' "$SPARKLE_PRIVATE_KEY" | python3 native/updater/generate-appcast.py \
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | python3 scripts/updates/generate-appcast.py \
             --archive "$RUNNER_TEMP/native-artifacts/Parachute-native-$ASSET_ARCH-$RELEASE_VERSION.zip" \
             --architecture "$ASSET_ARCH" \
             --version "$RELEASE_VERSION" --build "$BUILD_NUMBER" \
             --download-base-url "https://github.com/Harrilee/parachute/releases/download/v$RELEASE_VERSION/" \
-            --public-key-file native/updater/public-key.txt \
+            --public-key-file Resources/Sparkle/public-key.txt \
             --output "$RUNNER_TEMP/native-artifacts/appcast-$ASSET_ARCH.xml"
-      - name: Generate native migration feeds for review
-        run: python3 native/migration/generate-feeds.py "$RUNNER_TEMP/native-artifacts"
+      - name: Retain the pinned first-native migration feeds for validation
+        run: python3 scripts/migration/generate-feeds.py "$RUNNER_TEMP/native-artifacts"
       - name: Upload artifacts and notarization evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -161,8 +161,8 @@ jobs:
         with:
           name: sparkle-upgrade-evidence-${{ matrix.asset_arch }}
           path: |
-            native/build/sparkle-upgrade-*/result.json
-            native/build/sparkle-upgrade-*/events.jsonl
+            build/sparkle-upgrade-*/result.json
+            build/sparkle-upgrade-*/events.jsonl
           if-no-files-found: warn
           retention-days: 30
       - name: Remove ephemeral signing keychain
@@ -173,7 +173,9 @@ jobs:
 
   migration-validation:
     needs: native
-    name: Signed migration component ${{ matrix.asset_arch }}
+    # Later native releases retain this strict bundle-compatibility check. The
+    # public Electron bridge still installs 1.0.0; subsequent updates use Sparkle.
+    name: Signed replacement compatibility ${{ matrix.asset_arch }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -199,14 +201,14 @@ jobs:
           path: ${{ runner.temp }}/migration-inputs/native
       - name: Verify and download the published Electron 0.3.9 bridge
         run: |
-          python3 native/release/fetch-bridge-source.py --architecture "$ASSET_ARCH" \
+          python3 scripts/release/fetch-bridge-source.py --architecture "$ASSET_ARCH" \
             --output "$RUNNER_TEMP/migration-inputs/bridge"
       - name: Exercise genuine Squirrel replacement on isolated signed copies
         run: |
           curl --fail --location --retry 3 --proto '=https' \
             "https://github.com/Harrilee/parachute/releases/download/v0.3.8/Parachute-darwin-$ASSET_ARCH-0.3.8.zip" \
             -o "$RUNNER_TEMP/migration-inputs/legacy.zip"
-          python3 native/migration/test-shipit.py \
+          python3 Tests/Integration/test-shipit.py \
             --legacy "$RUNNER_TEMP/migration-inputs/legacy.zip" \
             --report-directory "$RUNNER_TEMP/migration-report" \
             "$RUNNER_TEMP/migration-inputs/bridge/Parachute-darwin-$ASSET_ARCH-0.3.9.zip" \
@@ -214,7 +216,7 @@ jobs:
       - name: Verify migration launcher using harmless app fixture
         run: |
           if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
-            python3 native/migration/test-launcher.py > "$RUNNER_TEMP/migration-report/launcher-result.log"
+            python3 Tests/Integration/test-launcher.py > "$RUNNER_TEMP/migration-report/launcher-result.log"
           else
             echo '::warning::Launcher fixture skipped: runner has no GUI login session.'
           fi

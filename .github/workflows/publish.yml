@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/publish.yml
-      - native/release/publish.py
-      - native/Tests/PublicationTests.py
-      - native/updater/public-key.txt
+      - scripts/release/publish.py
+      - Tests/ReleaseTests/PublicationTests.py
+      - Resources/Sparkle/public-key.txt
   workflow_dispatch:
     inputs:
       action:
@@ -27,7 +27,7 @@ on:
         description: Native version in the reviewed artifacts
         required: true
         type: string
-        default: '1.0.0'
+        default: '1.0.1'
 
 permissions:
   actions: read
@@ -47,7 +47,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Test publication safeguards
-        run: python3 native/Tests/PublicationTests.py
+        run: python3 Tests/ReleaseTests/PublicationTests.py
 
   publish:
     if: github.event_name == 'workflow_dispatch'
@@ -70,6 +70,17 @@ jobs:
           python-version: '3.12'
       - name: Validate and promote the existing native artifacts
         run: |
-          python3 native/release/publish.py --action "$PUBLICATION_ACTION" \
+          python3 scripts/release/publish.py --action "$PUBLICATION_ACTION" \
             --source-run-id "$SOURCE_RUN_ID" --source-commit "$SOURCE_COMMIT" \
-            --version "$RELEASE_VERSION"
+            --version "$RELEASE_VERSION" --output "$RUNNER_TEMP/native-publication"
+      - name: Retain internal publication evidence and signed update feeds
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-publication-${{ inputs.version }}-${{ inputs.source_run_id }}
+          path: |
+            ${{ runner.temp }}/native-publication/release-provenance.json
+            ${{ runner.temp }}/native-publication/feeds/*.xml
+            ${{ runner.temp }}/native-publication/migration-evidence-*/**/*
+          if-no-files-found: warn
+          retention-days: 30
